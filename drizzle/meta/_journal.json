@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1771506384602,
+      "tag": "0000_optimal_black_bolt",
+      "breakpoints": true
+    }
+  ]
+}
