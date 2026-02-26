@@ -19,6 +19,7 @@ export const appointments = sqliteTable(
     contactPhone: text("contact_phone"),
     notes: text("notes"), // admin-only, max 200 chars, server-filtered
     flaggedNotes: integer("flagged_notes").notNull().default(0),
+    reminderSent: integer("reminder_sent").notNull().default(0), // 0 or 1
     createdAt: integer("created_at").notNull(), // epoch ms
     updatedAt: integer("updated_at").notNull(), // epoch ms
   },
@@ -114,6 +115,21 @@ export const emailOutbox = sqliteTable(
   ]
 );
 
+// --- Patients ---
+
+export const patients = sqliteTable(
+  "patients",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    email: text("email"),
+    phone: text("phone"),
+    createdAt: integer("created_at").notNull(), // epoch ms
+    updatedAt: integer("updated_at").notNull(), // epoch ms
+  },
+  (table) => [index("idx_patients_name").on(table.name)]
+);
+
 // --- Type exports ---
 
 export type Appointment = typeof appointments.$inferSelect;
@@ -123,6 +139,7 @@ export type NewBlocker = typeof blockers.$inferInsert;
 export type AdminUser = typeof adminUsers.$inferSelect;
 export type Setting = typeof settings.$inferSelect;
 export type EmailOutboxEntry = typeof emailOutbox.$inferSelect;
+export type Patient = typeof patients.$inferSelect;
 
 // --- CHECK constraints applied via custom SQL in migration ---
 // CHECK(end_time > start_time)

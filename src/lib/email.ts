@@ -1,29 +1,33 @@
 import nodemailer from "nodemailer";
 import { getDb } from "./db";
 
-let transporter: nodemailer.Transporter | null = null;
+function getSmtpConfig(): { host: string; port: number; user: string; pass: string; from: string } | null {
+  const db = getDb();
+  const rows = db
+    .prepare(`SELECT key, value FROM settings WHERE key IN ('smtpHost', 'smtpPort', 'smtpUser', 'smtpPass', 'smtpFrom')`)
+    .all() as Array<{ key: string; value: string }>;
 
-function getTransporter(): nodemailer.Transporter | null {
-  if (transporter) return transporter;
+  const dbSettings: Record<string, string> = {};
+  for (const row of rows) dbSettings[row.key] = row.value;
 
-  const host = process.env.SMTP_HOST;
-  const port = parseInt(process.env.SMTP_PORT || "587", 10);
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
+  const host = dbSettings.smtpHost || process.env.SMTP_HOST || "";
+  const port = parseInt(dbSettings.smtpPort || process.env.SMTP_PORT || "587", 10);
+  const user = dbSettings.smtpUser || process.env.SMTP_USER || "";
+  const pass = dbSettings.smtpPass || process.env.SMTP_PASS || "";
+  const from = dbSettings.smtpFrom || process.env.SMTP_FROM || user;
 
-  if (!host || !user || !pass) {
-    console.warn("SMTP not configured. Emails will not be sent.");
-    return null;
-  }
+  if (!host || !user || !pass) return null;
 
-  transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: { user, pass },
+  return { host, port, user, pass, from };
+}
+
+function createTransporter(config: { host: string; port: number; user: string; pass: string }): nodemailer.Transporter {
+  return nodemailer.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: config.port === 465,
+    auth: { user: config.user, pass: config.pass },
   });
-
-  return transporter;
 }
 
 /**
@@ -33,7 +37,7 @@ function getTransporter(): nodemailer.Transporter | null {
  */
 export async function processEmailQueue(): Promise<number> {
   const db = getDb();
-  const mailer = getTransporter();
+  const smtpConfig = getSmtpConfig();
 
   // Load pending emails (max 10 per batch, oldest first)
   const pending = db
@@ -52,18 +56,18 @@ export async function processEmailQueue(): Promise<number> {
 
   if (pending.length === 0) return 0;
 
-  if (!mailer) {
+  if (!smtpConfig) {
     console.warn(`${pending.length} emails pending but SMTP not configured.`);
     return 0;
   }
 
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const mailer = createTransporter(smtpConfig);
   let sent = 0;
 
   for (const email of pending) {
     try {
       await mailer.sendMail({
-        from,
+        from: smtpConfig.from,
         to: email.to_address,
         subject: email.subject,
         html: email.html,
@@ -87,4 +91,58 @@ export async function processEmailQueue(): Promise<number> {
   }
 
   return sent;
+}
+
+/**
+ * Send a test email directly (not via outbox queue).
+ */
+export async function sendEmailWithAttachment(
+  to: string,
+  subject: string,
+  html: string,
+  attachment: { filename: string; content: Buffer }
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const smtpConfig = getSmtpConfig();
+  if (!smtpConfig) {
+    return { ok: false, error: "SMTP ist nicht konfiguriert" };
+  }
+
+  const mailer = createTransporter(smtpConfig);
+  try {
+    await mailer.sendMail({
+      from: smtpConfig.from,
+      to,
+      subject,
+      html,
+      attachments: [{ filename: attachment.filename, content: attachment.content, contentType: "application/pdf" }],
+    });
+    return { ok: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unbekannter Fehler";
+    return { ok: false, error: message };
+  }
+}
+
+/**
+ * Send a test email directly (not via outbox queue).
+ */
+export async function sendTestEmail(to: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const smtpConfig = getSmtpConfig();
+  if (!smtpConfig) {
+    return { ok: false, error: "SMTP ist nicht konfiguriert" };
+  }
+
+  const mailer = createTransporter(smtpConfig);
+  try {
+    await mailer.sendMail({
+      from: smtpConfig.from,
+      to,
+      subject: "PhysioBook — Test-E-Mail",
+      html: "<p>Diese E-Mail best&auml;tigt, dass der E-Mail-Versand korrekt konfiguriert ist.</p>",
+    });
+    return { ok: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unbekannter Fehler";
+    return { ok: false, error: message };
+  }
 }

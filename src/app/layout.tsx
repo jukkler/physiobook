@@ -8,7 +8,7 @@ const geist = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "Therapiezentrum Ziesemer | Kalender",
+  title: "Kalender",
   description: "Terminverwaltung für das Therapiezentrum Ziesemer",
 };
 

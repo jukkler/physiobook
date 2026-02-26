@@ -143,6 +143,7 @@ export const POST = withApiAuth(async (req) => {
     });
     insertSeries();
 
+    syncPatient(patientName, contactEmail, contactPhone, now);
     return Response.json({ seriesId, created, conflicts }, { status: 201 });
   }
 
@@ -168,5 +169,31 @@ export const POST = withApiAuth(async (req) => {
       now, now
     );
 
+  syncPatient(patientName, contactEmail, contactPhone, now);
   return Response.json({ id }, { status: 201 });
 });
+
+/** Upsert patient: create if not exists, update email/phone if provided and currently empty */
+function syncPatient(name: string, email?: string, phone?: string, now?: number) {
+  const db = getDb();
+  const ts = now ?? Date.now();
+
+  const existing = db
+    .prepare("SELECT id, email, phone FROM patients WHERE name = ? COLLATE NOCASE")
+    .get(name) as { id: string; email: string | null; phone: string | null } | undefined;
+
+  if (!existing) {
+    db.prepare(
+      `INSERT INTO patients (id, name, email, phone, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(uuidv4(), name, email || null, phone || null, ts, ts);
+  } else {
+    // Update only if new data is provided and existing field is empty
+    const newEmail = (!existing.email && email) ? email : existing.email;
+    const newPhone = (!existing.phone && phone) ? phone : existing.phone;
+    if (newEmail !== existing.email || newPhone !== existing.phone) {
+      db.prepare("UPDATE patients SET email = ?, phone = ?, updated_at = ? WHERE id = ?")
+        .run(newEmail, newPhone, ts, existing.id);
+    }
+  }
+}

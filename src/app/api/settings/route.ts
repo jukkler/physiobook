@@ -39,6 +39,17 @@ export const PATCH = withApiAuth(async (req) => {
     "retentionDaysExpired",
     "retentionDaysPast",
     "adminNotifyEmail",
+    "smtpHost",
+    "smtpPort",
+    "smtpUser",
+    "smtpPass",
+    "smtpFrom",
+    "autoArchiveEnabled",
+    "autoArchiveInterval",
+    "autoArchiveType",
+    "autoArchiveEmail",
+    "cronJobEmail",
+    "reminderNotificationsEnabled",
   ];
 
   // Validate values
@@ -67,6 +78,47 @@ export const PATCH = withApiAuth(async (req) => {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
         return Response.json({ error: "Ungültige E-Mail-Adresse" }, { status: 400 });
       }
+    }
+
+    if (key === "smtpPort" && value !== "") {
+      const port = Number(value);
+      if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        return Response.json({ error: "SMTP-Port muss zwischen 1 und 65535 liegen" }, { status: 400 });
+      }
+    }
+
+    if (key === "smtpFrom" && value !== "") {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        return Response.json({ error: "Ungültige Absender-E-Mail-Adresse" }, { status: 400 });
+      }
+    }
+
+    if (key === "autoArchiveEnabled" && !["true", "false"].includes(value)) {
+      return Response.json({ error: "autoArchiveEnabled muss 'true' oder 'false' sein" }, { status: 400 });
+    }
+
+    if (key === "autoArchiveInterval" && !["daily", "weekly", "monthly"].includes(value)) {
+      return Response.json({ error: "autoArchiveInterval muss 'daily', 'weekly' oder 'monthly' sein" }, { status: 400 });
+    }
+
+    if (key === "autoArchiveType" && !["week", "month", "year"].includes(value)) {
+      return Response.json({ error: "autoArchiveType muss 'week', 'month' oder 'year' sein" }, { status: 400 });
+    }
+
+    if (key === "autoArchiveEmail" && value !== "") {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        return Response.json({ error: "Ungültige Archiv-E-Mail-Adresse" }, { status: 400 });
+      }
+    }
+
+    if (key === "cronJobEmail" && value !== "") {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        return Response.json({ error: "Ungültige Cron-Job-E-Mail-Adresse" }, { status: 400 });
+      }
+    }
+
+    if (key === "reminderNotificationsEnabled" && !["true", "false"].includes(value)) {
+      return Response.json({ error: "reminderNotificationsEnabled muss 'true' oder 'false' sein" }, { status: 400 });
     }
   }
 

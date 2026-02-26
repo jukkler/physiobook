@@ -103,6 +103,7 @@ export const PATCH = withApiAuth(async (req, ctx) => {
         contact_phone = COALESCE(?, contact_phone),
         notes = CASE WHEN ? = 1 THEN ? ELSE notes END,
         flagged_notes = CASE WHEN ? = 1 THEN ? ELSE flagged_notes END,
+        reminder_sent = CASE WHEN ? = 1 THEN 0 ELSE reminder_sent END,
         updated_at = ?
       WHERE id = ?`
     ).run(
@@ -113,6 +114,7 @@ export const PATCH = withApiAuth(async (req, ctx) => {
       body.contactPhone ?? null,
       body.notes !== undefined ? 1 : 0, body.notes ?? null,
       body.notes !== undefined ? 1 : 0, notesFilter.flagged ? 1 : 0,
+      (body.startTime || body.durationMinutes) ? 1 : 0,
       now, id
     );
 
