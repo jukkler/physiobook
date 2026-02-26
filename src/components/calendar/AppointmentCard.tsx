@@ -47,23 +47,14 @@ export default function AppointmentCard({
 
   return (
     <div
-      className={`border rounded-md p-2 text-sm cursor-pointer hover:shadow-sm transition-shadow h-full overflow-hidden ${colorClass}`}
+      className={`border rounded-md px-2 py-0.5 text-sm cursor-pointer hover:shadow-sm transition-shadow h-full overflow-hidden ${colorClass}`}
       onClick={() => onClick?.(id)}
     >
-      <div className="flex items-center justify-between">
+      {/* Primary row: always visible */}
+      <div className="flex items-center gap-2 min-w-0">
         <span className="font-medium truncate">{patientName}</span>
-        <span className="text-xs opacity-70">{durationMinutes} Min.</span>
-      </div>
-      <div className="text-xs opacity-80">
-        {formatBerlinTime(startTime)} – {formatBerlinTime(endTime)}
-      </div>
-      {notes && (
-        <div className="text-xs opacity-60 truncate mt-0.5">{notes}</div>
-      )}
-      <div className="flex items-center justify-between mt-1">
-        <span className="text-xs font-medium">{STATUS_LABELS[status]}</span>
         {status === "REQUESTED" && (
-          <div className="flex gap-1">
+          <div className="flex gap-1 flex-shrink-0">
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -85,6 +76,10 @@ export default function AppointmentCard({
           </div>
         )}
       </div>
+      {/* Secondary row: notes, only if space allows */}
+      {notes && (
+        <div className="text-xs opacity-60 truncate">{notes}</div>
+      )}
     </div>
   );
 }

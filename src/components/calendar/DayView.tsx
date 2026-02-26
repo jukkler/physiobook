@@ -22,6 +22,7 @@ interface Blocker {
   title: string;
   startTime: number;
   endTime: number;
+  blockerGroupId?: string | null;
 }
 
 interface Settings {
@@ -34,16 +35,20 @@ interface Settings {
 
 interface DayViewProps {
   date: string; // YYYY-MM-DD
+  columnMode: "split" | "single";
   onDateChange: (date: string) => void;
   onCreateAppointment: (startTimeMs: number) => void;
   onEditAppointment: (appointment: Appointment) => void;
+  onBlockerClick: (blocker: Blocker) => void;
 }
 
 export default function DayView({
   date,
+  columnMode,
   onDateChange,
   onCreateAppointment,
   onEditAppointment,
+  onBlockerClick,
 }: DayViewProps) {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [blockersList, setBlockers] = useState<Blocker[]>([]);
@@ -130,6 +135,7 @@ export default function DayView({
 
   const morningSlots = generateSlots(morningStart, morningEnd);
   const afternoonSlots = generateSlots(afternoonStart, afternoonEnd);
+  const allSlots = generateSlots(morningStart, afternoonEnd);
 
   // Convert Berlin time (minutes of day) to epoch ms for this date
   function minutesToMs(minutes: number): number {
@@ -156,6 +162,13 @@ export default function DayView({
     onCreateAppointment(minutesToMs(slotMinutes));
   }
 
+  const maxSlotCount = columnMode === "single"
+    ? allSlots.length
+    : Math.max(morningSlots.length, afternoonSlots.length);
+
+  // Percentage height per slot relative to container
+  const slotHeightPct = 100 / maxSlotCount;
+
   function renderColumn(
     title: string,
     slots: { label: string; startMinutes: number }[]
@@ -179,54 +192,62 @@ export default function DayView({
     );
 
     return (
-      <div className="flex-1">
-        <h3 className="text-sm font-semibold text-gray-500 mb-2 text-center">
+      <div className="flex-1 flex flex-col">
+        <h3 className="text-sm font-semibold text-gray-500 mb-2 text-center flex-shrink-0">
           {title}
         </h3>
-        <div className="relative">
+        <div className="relative flex-1" style={{ minHeight: `${maxSlotCount * 28}px` }}>
           {/* Slot grid (background) */}
-          {slots.map((slot) => {
+          {slots.map((slot, slotIndex) => {
             const slotMs = minutesToMs(slot.startMinutes);
             const slotEndMs = slotMs + slotDuration * 60_000;
 
-            const hasBlocker = columnBlockers.some(
+            const slotBlocker = columnBlockers.find(
               (b) => b.startTime < slotEndMs && b.endTime > slotMs
             );
+            const hasBlocker = !!slotBlocker;
             const isOccupied =
               hasBlocker ||
               columnAppts.some(
                 (a) => a.startTime < slotEndMs && a.endTime > slotMs
               );
 
-            // Show blocker label only in the slot where it starts
-            const blockerLabels = columnBlockers.filter(
-              (b) => b.startTime >= slotMs && b.startTime < slotEndMs
-            );
+            // Show blocker label in the first slot it overlaps
+            const showBlockerLabel = hasBlocker && (slotIndex === 0 || !(
+              slotBlocker!.startTime < minutesToMs(slots[slotIndex - 1].startMinutes) + slotDuration * 60_000 &&
+              slotBlocker!.endTime > minutesToMs(slots[slotIndex - 1].startMinutes)
+            ));
+
+            const isEvenRow = slotIndex % 2 === 1;
 
             return (
               <div
                 key={slot.startMinutes}
-                className={`flex border-b border-gray-100 h-12 ${
+                className={`flex border-b border-gray-100 ${
                   hasBlocker
-                    ? "bg-gray-200 cursor-not-allowed"
+                    ? "bg-gray-200 cursor-pointer hover:bg-gray-300 transition-colors"
+                    : isEvenRow
+                    ? "bg-blue-100/60 hover:bg-blue-100 cursor-pointer"
                     : "hover:bg-blue-50 cursor-pointer"
                 }`}
-                onClick={() =>
-                  !isOccupied && handleSlotClick(slot.startMinutes)
-                }
+                style={{ height: `${slotHeightPct}%` }}
+                onClick={() => {
+                  if (hasBlocker && slotBlocker) {
+                    onBlockerClick(slotBlocker);
+                  } else if (!isOccupied) {
+                    handleSlotClick(slot.startMinutes);
+                  }
+                }}
               >
-                <div className="w-14 text-xs text-gray-400 py-1 text-right pr-2 flex-shrink-0">
+                <div className="w-14 text-xs text-gray-400 text-right pr-2 flex-shrink-0 flex items-center justify-end">
                   {slot.label}
                 </div>
-                <div className="flex-1 py-0.5 px-1">
-                  {blockerLabels.map((b) => (
-                    <div
-                      key={b.id}
-                      className="text-xs text-gray-500 italic bg-gray-300 rounded px-1 py-0.5"
-                    >
-                      {b.title}
+                <div className="flex-1 px-1 flex items-center">
+                  {showBlockerLabel && (
+                    <div className="text-xs text-gray-500 italic bg-gray-300 rounded px-1 py-0.5">
+                      {slotBlocker!.title}
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
             );
@@ -236,8 +257,10 @@ export default function DayView({
           {columnAppts.map((a) => {
             const startMin = Math.max(msToMinutes(a.startTime), columnStartMin);
             const endMin = Math.min(msToMinutes(a.endTime), columnEndMin);
-            const topPct = ((startMin - columnStartMin) / totalMinutes) * 100;
-            const heightPct = ((endMin - startMin) / totalMinutes) * 100;
+            // Scale percentages: slots only occupy (slots.length / maxSlotCount) of container
+            const scale = slots.length / maxSlotCount;
+            const topPct = ((startMin - columnStartMin) / totalMinutes) * scale * 100;
+            const heightPct = ((endMin - startMin) / totalMinutes) * scale * 100;
 
             return (
               <div
@@ -277,9 +300,9 @@ export default function DayView({
   ).length;
 
   return (
-    <div>
+    <div className="flex flex-col h-full">
       {/* Navigation */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between pb-4 flex-shrink-0">
         <div className="flex items-center gap-2">
           <button
             onClick={() => navigateDay(-1)}
@@ -318,15 +341,21 @@ export default function DayView({
         </div>
       </div>
 
-      {loading ? (
-        <div className="text-center py-12 text-gray-400">Laden...</div>
-      ) : (
-        <div className="flex gap-4">
-          {renderColumn("Vormittag", morningSlots)}
-          <div className="w-px bg-gray-200" />
-          {renderColumn("Nachmittag", afternoonSlots)}
-        </div>
-      )}
+      <div className="flex-1 min-h-0 overflow-auto">
+        {loading ? (
+          <div className="text-center py-12 text-gray-400">Laden...</div>
+        ) : columnMode === "single" ? (
+          <div className="flex min-h-full">
+            {renderColumn("Tagesplan", allSlots)}
+          </div>
+        ) : (
+          <div className="flex gap-4 min-h-full">
+            {renderColumn("Vormittag", morningSlots)}
+            <div className="w-px bg-gray-200" />
+            {renderColumn("Nachmittag", afternoonSlots)}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

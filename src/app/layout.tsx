@@ -8,8 +8,8 @@ const geist = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "PhysioBook",
-  description: "Terminverwaltung für Physiotherapiepraxen",
+  title: "Therapiezentrum Ziesemer | Kalender",
+  description: "Terminverwaltung für das Therapiezentrum Ziesemer",
 };
 
 export default function RootLayout({

@@ -61,6 +61,8 @@ export const adminUsers = sqliteTable("admin_users", {
   username: text("username").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   tokenVersion: integer("token_version").notNull().default(1),
+  columnMode: text("column_mode").notNull().default("split"), // "split" | "single"
+  zoomLevel: integer("zoom_level").notNull().default(100), // 70–150
   createdAt: integer("created_at").notNull(), // epoch ms
 });
 

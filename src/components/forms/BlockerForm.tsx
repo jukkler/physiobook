@@ -59,6 +59,7 @@ export default function BlockerForm({
   const [endTime, setEndTime] = useState(
     epochToTimeInput(initialMs + 60 * 60_000) // +1 hour default
   );
+  const [allDay, setAllDay] = useState(false);
   const [isSeries, setIsSeries] = useState(false);
   const [seriesCount, setSeriesCount] = useState(5);
   const [seriesInterval, setSeriesInterval] = useState(7);
@@ -71,8 +72,8 @@ export default function BlockerForm({
     setSaving(true);
 
     try {
-      const startMs = dateTimeToEpoch(startDate, startTime);
-      const endMs = dateTimeToEpoch(endDate, endTime);
+      const startMs = dateTimeToEpoch(startDate, allDay ? "00:00" : startTime);
+      const endMs = dateTimeToEpoch(endDate, allDay ? "23:59" : endTime);
 
       if (endMs <= startMs) {
         setError("Ende muss nach dem Start liegen");
@@ -147,7 +148,18 @@ export default function BlockerForm({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={allDay}
+                onChange={(e) => setAllDay(e.target.checked)}
+              />
+              <span className="font-medium text-gray-700">Ganztägig</span>
+            </label>
+          </div>
+
+          <div className={`grid ${allDay ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Start-Datum
@@ -160,21 +172,23 @@ export default function BlockerForm({
                 className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Start-Uhrzeit
-              </label>
-              <input
-                type="time"
-                required
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+            {!allDay && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Start-Uhrzeit
+                </label>
+                <input
+                  type="time"
+                  required
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className={`grid ${allDay ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Ende-Datum
@@ -187,18 +201,20 @@ export default function BlockerForm({
                 className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Ende-Uhrzeit
-              </label>
-              <input
-                type="time"
-                required
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+            {!allDay && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Ende-Uhrzeit
+                </label>
+                <input
+                  type="time"
+                  required
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
           </div>
 
           <div>

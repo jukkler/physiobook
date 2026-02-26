@@ -49,6 +49,8 @@ export default function AppointmentForm({
   const [saving, setSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteScope, setDeleteScope] = useState<"single" | "series">("single");
+  const [isSeries, setIsSeries] = useState(false);
+  const [seriesCount, setSeriesCount] = useState(6);
 
   function epochToDateInput(ms: number): string {
     return new Intl.DateTimeFormat("en-CA", {
@@ -112,6 +114,11 @@ export default function AppointmentForm({
         status,
       };
 
+      if (!isEdit && isSeries) {
+        const dayOfWeek = new Date(startTimeMs).getUTCDay();
+        payload.series = { dayOfWeek, count: seriesCount };
+      }
+
       const url = isEdit ? `/api/appointments/${appointment.id}` : "/api/appointments";
       const method = isEdit ? "PATCH" : "POST";
 
@@ -125,6 +132,13 @@ export default function AppointmentForm({
         const data = await res.json();
         setError(data.error || "Fehler beim Speichern");
         return;
+      }
+
+      if (!isEdit && isSeries) {
+        const data = await res.json();
+        if (data.conflicts?.length > 0) {
+          alert(`${data.created.length} von ${seriesCount} Terminen erstellt. ${data.conflicts.length} Konflikte wurden übersprungen.`);
+        }
       }
 
       onSave();
@@ -183,6 +197,7 @@ export default function AppointmentForm({
             <input
               type="text"
               required
+              autoFocus
               value={patientName}
               onChange={(e) => setPatientName(e.target.value)}
               className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -232,6 +247,38 @@ export default function AppointmentForm({
               <option value={60}>60 Minuten</option>
             </select>
           </div>
+
+          {!isEdit && (
+            <div>
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isSeries}
+                  onChange={(e) => setIsSeries(e.target.checked)}
+                  className="rounded"
+                />
+                Serientermin (wöchentlich wiederholen)
+              </label>
+              {isSeries && (
+                <div className="mt-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Anzahl Wochen
+                  </label>
+                  <input
+                    type="number"
+                    min={2}
+                    max={52}
+                    value={seriesCount}
+                    onChange={(e) => setSeriesCount(Math.max(2, Math.min(52, Number(e.target.value))))}
+                    className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Erstellt {seriesCount} Termine im wöchentlichen Abstand
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {isEdit && (
             <div>

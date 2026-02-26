@@ -17,6 +17,7 @@ interface Blocker {
   title: string;
   startTime: number;
   endTime: number;
+  blockerGroupId?: string | null;
 }
 
 interface Settings {
@@ -31,6 +32,7 @@ interface WeekViewProps {
   date: string; // any date in the week
   onDateChange: (date: string) => void;
   onDayClick: (date: string) => void;
+  onBlockerClick: (blocker: Blocker) => void;
 }
 
 const WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
@@ -39,6 +41,7 @@ export default function WeekView({
   date,
   onDateChange,
   onDayClick,
+  onBlockerClick,
 }: WeekViewProps) {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [blockersList, setBlockers] = useState<Blocker[]>([]);
@@ -111,6 +114,9 @@ export default function WeekView({
   const [endH] = afternoonEnd.split(":").map(Number);
   const totalHours = endH - startH;
 
+  // Min pixel height per hour; actual height stretches to fill screen
+  const hourHeightPx = 56;
+
   // Generate hour labels
   const hourLabels = Array.from({ length: totalHours }, (_, i) => {
     const h = startH + i;
@@ -156,9 +162,9 @@ export default function WeekView({
   }
 
   return (
-    <div>
+    <div className="flex flex-col h-full">
       {/* Navigation */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between pb-4 flex-shrink-0">
         <div className="flex items-center gap-2">
           <button
             onClick={() => navigateWeek(-1)}
@@ -197,17 +203,18 @@ export default function WeekView({
         </h2>
       </div>
 
-      {loading ? (
-        <div className="text-center py-12 text-gray-400">Laden...</div>
-      ) : (
-        <div className="flex">
-          {/* Hour labels */}
-          <div className="w-12 flex-shrink-0 pt-8">
+      <div className="flex-1 min-h-0 overflow-auto">
+        {loading ? (
+          <div className="text-center py-12 text-gray-400">Laden...</div>
+        ) : (
+          <div className="flex min-h-full">
+            {/* Hour labels */}
+          <div className="w-12 flex-shrink-0 flex flex-col pt-8" style={{ minHeight: `${totalHours * hourHeightPx + 32}px` }}>
             {hourLabels.map((label) => (
               <div
                 key={label}
-                className="text-xs text-gray-400 text-right pr-2"
-                style={{ height: `${100 / totalHours}%`, minHeight: "2.5rem" }}
+                className="flex-1 text-sm text-gray-400 text-right pr-2"
+                style={{ minHeight: `${hourHeightPx}px` }}
               >
                 {label}
               </div>
@@ -224,25 +231,25 @@ export default function WeekView({
               return (
                 <div
                   key={dayDate}
-                  className={`bg-white cursor-pointer hover:bg-blue-50/30 ${
+                  className={`bg-white cursor-pointer hover:bg-blue-50/30 flex flex-col ${
                     isToday ? "ring-2 ring-blue-400 ring-inset" : ""
                   }`}
                   onClick={() => onDayClick(dayDate)}
                 >
                   {/* Day header */}
                   <div
-                    className={`text-center py-1 border-b text-sm font-medium ${
+                    className={`text-center py-1.5 border-b text-base font-medium flex-shrink-0 ${
                       isToday
                         ? "bg-blue-600 text-white"
                         : "bg-gray-50 text-gray-700"
                     }`}
                   >
                     <div>{WEEKDAY_LABELS[dayIdx]}</div>
-                    <div className="text-xs">{formatDayHeader(dayDate)}</div>
+                    <div className="text-sm">{formatDayHeader(dayDate)}</div>
                   </div>
 
                   {/* Time grid */}
-                  <div className="relative" style={{ minHeight: `${totalHours * 2.5}rem` }}>
+                  <div className="relative flex-1" style={{ minHeight: `${totalHours * hourHeightPx}px` }}>
                     {/* Hour lines */}
                     {hourLabels.map((_, i) => (
                       <div
@@ -253,21 +260,39 @@ export default function WeekView({
                     ))}
 
                     {/* Blockers */}
-                    {dayBlockers.map((b) => (
-                      <div
-                        key={b.id}
-                        className="absolute left-0 right-0 bg-gray-200/70 border-l-2 border-gray-400 mx-0.5"
-                        style={{
-                          top: `${getSlotPosition(b.startTime)}%`,
-                          height: `${getSlotHeight(b.startTime, b.endTime)}%`,
-                          minHeight: "0.75rem",
-                        }}
-                      >
-                        <span className="text-[10px] text-gray-500 px-0.5 truncate block">
-                          {b.title}
-                        </span>
-                      </div>
-                    ))}
+                    {dayBlockers.map((b) => {
+                      // Clamp blocker to this day's visible range for multi-day blockers
+                      const startDateBerlin = new Intl.DateTimeFormat("en-CA", {
+                        timeZone: "Europe/Berlin",
+                      }).format(new Date(b.startTime));
+                      const endDateBerlin = new Intl.DateTimeFormat("en-CA", {
+                        timeZone: "Europe/Berlin",
+                      }).format(new Date(b.endTime));
+
+                      const topPct = startDateBerlin < dayDate ? 0 : getSlotPosition(b.startTime);
+                      const bottomPct = endDateBerlin > dayDate ? 100 : getSlotPosition(b.endTime);
+                      const heightPct = Math.max(1, bottomPct - topPct);
+
+                      return (
+                        <div
+                          key={b.id}
+                          className="absolute left-0 right-0 bg-gray-300/80 border-l-2 border-gray-500 mx-0.5 flex items-center justify-center cursor-pointer hover:bg-gray-400/80 transition-colors"
+                          style={{
+                            top: `${topPct}%`,
+                            height: `${heightPct}%`,
+                            minHeight: "1.5rem",
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onBlockerClick(b);
+                          }}
+                        >
+                          <span className="text-sm text-gray-600 font-medium">
+                            {b.title}
+                          </span>
+                        </div>
+                      );
+                    })}
 
                     {/* Appointments */}
                     {dayAppts.map((a) => (
@@ -282,10 +307,10 @@ export default function WeekView({
                           minHeight: "0.75rem",
                         }}
                       >
-                        <span className="text-[10px] font-medium truncate block">
+                        <span className="text-xs font-medium truncate block">
                           {a.patientName}
                         </span>
-                        <span className="text-[9px] opacity-70 truncate block">
+                        <span className="text-[11px] opacity-70 truncate block">
                           {formatBerlinTime(a.startTime)}
                         </span>
                       </div>
@@ -295,8 +320,9 @@ export default function WeekView({
               );
             })}
           </div>
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

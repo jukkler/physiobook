@@ -7,17 +7,21 @@ export default async function DashboardPage() {
   if (!session) redirect("/login");
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b border-gray-200">
+    <div className="h-screen flex flex-col bg-gray-50">
+      <header className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <h1 className="text-xl font-bold text-gray-900">PhysioBook</h1>
+          <div className="flex items-center gap-3">
+            <img src="/logo.svg" alt="Therapiezentrum Ziesemer" className="h-8" />
+            <h1 className="text-xl font-bold text-gray-900">Kalender</h1>
+          </div>
           <div className="flex items-center gap-4">
+            <div id="header-toggle-portal" />
             <span className="text-sm text-gray-600">{session.username}</span>
             <LogoutButton />
           </div>
         </div>
       </header>
-      <main className="max-w-7xl mx-auto px-4 py-4">
+      <main className="max-w-7xl mx-auto px-4 py-4 flex-1 min-h-0 flex flex-col w-full">
         <DashboardClient />
       </main>
     </div>
