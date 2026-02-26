@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { epochToDateInput, epochToTimeInput, dateTimeToEpoch } from "@/lib/time";
 
 interface BlockerFormProps {
   defaultStartTime?: number;
@@ -14,43 +15,6 @@ export default function BlockerForm({
   onClose,
 }: BlockerFormProps) {
   const initialMs = defaultStartTime ?? Date.now();
-
-  function epochToDateInput(ms: number): string {
-    return new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Europe/Berlin",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date(ms));
-  }
-
-  function epochToTimeInput(ms: number): string {
-    return new Intl.DateTimeFormat("en-GB", {
-      timeZone: "Europe/Berlin",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }).format(new Date(ms));
-  }
-
-  function dateTimeToEpoch(dateStr: string, timeStr: string): number {
-    const [year, month, day] = dateStr.split("-").map(Number);
-    const [hours, minutes] = timeStr.split(":").map(Number);
-    const utcGuess = new Date(Date.UTC(year, month - 1, day, hours, minutes, 0));
-    const berlinFormatter = new Intl.DateTimeFormat("en-GB", {
-      timeZone: "Europe/Berlin",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-    const parts = berlinFormatter.formatToParts(utcGuess);
-    const berlinHour = parseInt(parts.find((p) => p.type === "hour")?.value || "0", 10);
-    const berlinMinute = parseInt(parts.find((p) => p.type === "minute")?.value || "0", 10);
-    let offsetMinutes = (berlinHour * 60 + berlinMinute) - (hours * 60 + minutes);
-    if (offsetMinutes > 720) offsetMinutes -= 1440;
-    if (offsetMinutes < -720) offsetMinutes += 1440;
-    return Date.UTC(year, month - 1, day, hours, minutes, 0) - offsetMinutes * 60_000;
-  }
 
   const [title, setTitle] = useState("");
   const [startDate, setStartDate] = useState(epochToDateInput(initialMs));

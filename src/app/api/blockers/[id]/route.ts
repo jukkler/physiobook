@@ -25,6 +25,10 @@ export const DELETE = withApiAuth(async (req, ctx) => {
   const url = new URL(req.url);
   const scope = url.searchParams.get("scope") || "single";
 
+  if (scope !== "single" && scope !== "group") {
+    return Response.json({ error: "scope muss 'single' oder 'group' sein" }, { status: 400 });
+  }
+
   const db = getDb();
   const existing = db
     .prepare("SELECT * FROM blockers WHERE id = ?")

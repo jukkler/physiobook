@@ -1,20 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { formatBerlinTime } from "@/lib/time";
-
-interface Appointment {
-  id: string;
-  patientName: string;
-  startTime: number;
-  endTime: number;
-  durationMinutes: number;
-  status: string;
-  contactEmail?: string | null;
-  contactPhone?: string | null;
-  notes?: string | null;
-  seriesId?: string | null;
-}
+import { epochToDateInput, epochToTimeInput, dateTimeToEpoch } from "@/lib/time";
+import type { Appointment } from "@/types/models";
 
 interface AppointmentFormProps {
   /** If provided, we're editing; otherwise creating */
@@ -51,50 +39,6 @@ export default function AppointmentForm({
   const [deleteScope, setDeleteScope] = useState<"single" | "series">("single");
   const [isSeries, setIsSeries] = useState(false);
   const [seriesCount, setSeriesCount] = useState(6);
-
-  function epochToDateInput(ms: number): string {
-    return new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Europe/Berlin",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date(ms));
-  }
-
-  function epochToTimeInput(ms: number): string {
-    return new Intl.DateTimeFormat("en-GB", {
-      timeZone: "Europe/Berlin",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }).format(new Date(ms));
-  }
-
-  function dateTimeToEpoch(dateStr: string, timeStr: string): number {
-    const [year, month, day] = dateStr.split("-").map(Number);
-    const [hours, minutes] = timeStr.split(":").map(Number);
-
-    const utcGuess = new Date(Date.UTC(year, month - 1, day, hours, minutes, 0));
-
-    const berlinFormatter = new Intl.DateTimeFormat("en-GB", {
-      timeZone: "Europe/Berlin",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-    const parts = berlinFormatter.formatToParts(utcGuess);
-    const berlinHour = parseInt(parts.find((p) => p.type === "hour")?.value || "0", 10);
-    const berlinMinute = parseInt(parts.find((p) => p.type === "minute")?.value || "0", 10);
-
-    let offsetMinutes = (berlinHour * 60 + berlinMinute) - (hours * 60 + minutes);
-    if (offsetMinutes > 720) offsetMinutes -= 1440;
-    if (offsetMinutes < -720) offsetMinutes += 1440;
-
-    return Date.UTC(year, month - 1, day, hours, minutes, 0) - offsetMinutes * 60_000;
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

@@ -89,3 +89,25 @@ export function hasConflicts(
   const blockerConflicts = findBlockerConflicts(startTimeMs, endTimeMs);
   return blockerConflicts.length > 0;
 }
+
+/**
+ * Load all appointments and blockers in a time range for batch conflict checking.
+ * Returns a function that checks a single slot against the pre-loaded data.
+ */
+export function createBatchConflictChecker(
+  rangeStartMs: number,
+  rangeEndMs: number
+): (slotStart: number, slotEnd: number) => boolean {
+  const appts = findAppointmentConflicts(rangeStartMs, rangeEndMs);
+  const blockers = findBlockerConflicts(rangeStartMs, rangeEndMs);
+
+  return (slotStart: number, slotEnd: number): boolean => {
+    for (const a of appts) {
+      if (slotStart < a.endTime && slotEnd > a.startTime) return true;
+    }
+    for (const b of blockers) {
+      if (slotStart < b.endTime && slotEnd > b.startTime) return true;
+    }
+    return false;
+  };
+}

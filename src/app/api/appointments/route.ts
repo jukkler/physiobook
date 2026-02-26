@@ -5,7 +5,7 @@ import { getDb } from "@/lib/db";
 import { appointments } from "@/lib/db/schema";
 import { withApiAuth } from "@/lib/auth";
 import { checkCsrf } from "@/lib/csrf";
-import { hasConflicts } from "@/lib/overlap";
+import { hasConflicts, createBatchConflictChecker } from "@/lib/overlap";
 import { filterNotes } from "@/lib/notes-filter";
 
 // GET /api/appointments?from=<epochMs>&to=<epochMs>
@@ -62,6 +62,16 @@ export const POST = withApiAuth(async (req) => {
     );
   }
 
+  if (patientName.length > 100) {
+    return Response.json({ error: "patientName darf max. 100 Zeichen lang sein" }, { status: 400 });
+  }
+  if (contactEmail && contactEmail.length > 100) {
+    return Response.json({ error: "contactEmail darf max. 100 Zeichen lang sein" }, { status: 400 });
+  }
+  if (contactPhone && contactPhone.length > 30) {
+    return Response.json({ error: "contactPhone darf max. 30 Zeichen lang sein" }, { status: 400 });
+  }
+
   if (![15, 30, 45, 60].includes(durationMinutes)) {
     return Response.json(
       { error: "durationMinutes muss 15, 30, 45 oder 60 sein" },
@@ -87,44 +97,51 @@ export const POST = withApiAuth(async (req) => {
     }
 
     const seriesId = uuidv4();
-    const created: string[] = [];
-    const conflicts: number[] = [];
 
-    // Generate dates for each occurrence
+    // Pre-compute all slots
+    const slots: { start: number; end: number }[] = [];
     let currentDate = new Date(startTime);
-    const timeOfDay = currentDate.getUTCHours() * 3600_000 +
-      currentDate.getUTCMinutes() * 60_000 +
-      currentDate.getUTCSeconds() * 1000;
-
     for (let i = 0; i < count; i++) {
-      // Find next occurrence of dayOfWeek
       if (i > 0) {
         currentDate.setUTCDate(currentDate.getUTCDate() + 7);
       }
-
       const slotStart = currentDate.getTime();
-      const slotEnd = slotStart + durationMinutes * 60_000;
-
-      if (hasConflicts(slotStart, slotEnd)) {
-        conflicts.push(slotStart);
-        continue;
-      }
-
-      const id = uuidv4();
-      getDb()
-        .prepare(
-          `INSERT INTO appointments (id, patient_name, start_time, end_time, duration_minutes, status, series_id, contact_email, contact_phone, notes, flagged_notes, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-          id, patientName, slotStart, slotEnd, durationMinutes,
-          appointmentStatus, seriesId,
-          contactEmail || null, contactPhone || null,
-          notes || null, notesResult.flagged ? 1 : 0,
-          now, now
-        );
-      created.push(id);
+      slots.push({ start: slotStart, end: slotStart + durationMinutes * 60_000 });
     }
+
+    // Batch conflict check: 2 queries total instead of 2 per slot
+    const rangeStart = slots[0].start;
+    const rangeEnd = slots[slots.length - 1].end;
+    const checkConflict = createBatchConflictChecker(rangeStart, rangeEnd);
+
+    const created: string[] = [];
+    const conflicts: number[] = [];
+
+    // All inserts in a single transaction
+    const insertSeries = getDb().transaction(() => {
+      for (const slot of slots) {
+        if (checkConflict(slot.start, slot.end)) {
+          conflicts.push(slot.start);
+          continue;
+        }
+
+        const id = uuidv4();
+        getDb()
+          .prepare(
+            `INSERT INTO appointments (id, patient_name, start_time, end_time, duration_minutes, status, series_id, contact_email, contact_phone, notes, flagged_notes, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          )
+          .run(
+            id, patientName, slot.start, slot.end, durationMinutes,
+            appointmentStatus, seriesId,
+            contactEmail || null, contactPhone || null,
+            notes || null, notesResult.flagged ? 1 : 0,
+            now, now
+          );
+        created.push(id);
+      }
+    });
+    insertSeries();
 
     return Response.json({ seriesId, created, conflicts }, { status: 201 });
   }

@@ -39,6 +39,16 @@ export async function POST(req: Request) {
     );
   }
 
+  if (patientName.length > 100) {
+    return Response.json({ error: "Name darf max. 100 Zeichen lang sein" }, { status: 400 });
+  }
+  if (contactEmail.length > 100) {
+    return Response.json({ error: "E-Mail darf max. 100 Zeichen lang sein" }, { status: 400 });
+  }
+  if (contactPhone && contactPhone.length > 30) {
+    return Response.json({ error: "Telefonnummer darf max. 30 Zeichen lang sein" }, { status: 400 });
+  }
+
   if (![15, 30, 45, 60].includes(durationMinutes)) {
     return Response.json(
       { error: "durationMinutes muss 15, 30, 45 oder 60 sein" },

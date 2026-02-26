@@ -63,9 +63,9 @@ export async function POST(req: Request) {
   const cleanupPastResult = db
     .prepare(
       `DELETE FROM appointments
-       WHERE status = 'CONFIRMED' AND end_time < ? AND end_time < ?`
+       WHERE status = 'CONFIRMED' AND end_time < ?`
     )
-    .run(now, now - retentionPastMs);
+    .run(now - retentionPastMs);
   results.cleanedPast = cleanupPastResult.changes;
 
   // 3c. Outbox retention (SENT > 30 days, FAILED > 90 days)

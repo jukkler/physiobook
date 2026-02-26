@@ -6,27 +6,7 @@ import DayView from "./calendar/DayView";
 import WeekView from "./calendar/WeekView";
 import AppointmentForm from "./forms/AppointmentForm";
 import BlockerForm from "./forms/BlockerForm";
-
-interface Appointment {
-  id: string;
-  patientName: string;
-  startTime: number;
-  endTime: number;
-  durationMinutes: number;
-  status: string;
-  contactEmail?: string | null;
-  contactPhone?: string | null;
-  notes?: string | null;
-  seriesId?: string | null;
-}
-
-interface Blocker {
-  id: string;
-  title: string;
-  startTime: number;
-  endTime: number;
-  blockerGroupId?: string | null;
-}
+import type { Appointment, Blocker } from "@/types/models";
 
 type ViewMode = "day" | "week";
 
@@ -60,7 +40,7 @@ export default function DashboardClient() {
           setZoomLevel(data.zoomLevel);
         }
       })
-      .catch(() => {});
+      .catch((e) => console.warn("Preferences:", e));
   }, []);
 
   function changeZoom(delta: number) {
@@ -70,7 +50,7 @@ export default function DashboardClient() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ zoomLevel: next }),
-      }).catch(() => {});
+      }).catch((e) => console.warn("Preferences:", e));
       return next;
     });
   }
@@ -323,7 +303,7 @@ export default function DashboardClient() {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ columnMode: next }),
-              }).catch(() => {});
+              }).catch((e) => console.warn("Preferences:", e));
             }}
             className={`relative w-11 h-6 rounded-full transition-colors ${
               columnMode === "single" ? "bg-blue-500" : "bg-gray-300"

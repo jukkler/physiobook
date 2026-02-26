@@ -106,3 +106,56 @@ export function getWeekMonday(dateStr: string): string {
   date.setUTCDate(date.getUTCDate() + diff);
   return date.toISOString().split("T")[0];
 }
+
+/**
+ * Convert epoch ms to date input value (YYYY-MM-DD) in Europe/Berlin.
+ */
+export function epochToDateInput(ms: number): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: BERLIN_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(ms));
+}
+
+/**
+ * Convert epoch ms to time input value (HH:MM) in Europe/Berlin.
+ */
+export function epochToTimeInput(ms: number): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: BERLIN_TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(ms));
+}
+
+/**
+ * Convert date string (YYYY-MM-DD) + time string (HH:MM) in Europe/Berlin to epoch ms.
+ */
+export function dateTimeToEpoch(dateStr: string, timeStr: string): number {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const [hours, minutes] = timeStr.split(":").map(Number);
+
+  const utcGuess = new Date(Date.UTC(year, month - 1, day, hours, minutes, 0));
+
+  const berlinFormatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone: BERLIN_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const parts = berlinFormatter.formatToParts(utcGuess);
+  const berlinHour = parseInt(parts.find((p) => p.type === "hour")?.value || "0", 10);
+  const berlinMinute = parseInt(parts.find((p) => p.type === "minute")?.value || "0", 10);
+
+  let offsetMinutes = (berlinHour * 60 + berlinMinute) - (hours * 60 + minutes);
+  if (offsetMinutes > 720) offsetMinutes -= 1440;
+  if (offsetMinutes < -720) offsetMinutes += 1440;
+
+  return Date.UTC(year, month - 1, day, hours, minutes, 0) - offsetMinutes * 60_000;
+}

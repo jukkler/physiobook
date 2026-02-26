@@ -2,31 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { formatBerlinTime, getWeekMonday, addDays } from "@/lib/time";
-
-interface Appointment {
-  id: string;
-  patientName: string;
-  startTime: number;
-  endTime: number;
-  durationMinutes: number;
-  status: string;
-}
-
-interface Blocker {
-  id: string;
-  title: string;
-  startTime: number;
-  endTime: number;
-  blockerGroupId?: string | null;
-}
-
-interface Settings {
-  morningStart: string;
-  morningEnd: string;
-  afternoonStart: string;
-  afternoonEnd: string;
-  slotDuration: string;
-}
+import type { Appointment, Blocker, Settings } from "@/types/models";
 
 interface WeekViewProps {
   date: string; // any date in the week
@@ -47,35 +23,41 @@ export default function WeekView({
   const [blockersList, setBlockers] = useState<Blocker[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const monday = getWeekMonday(date);
 
   const weekDates = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
+    setError(null);
     const weekStart = new Date(monday + "T00:00:00+01:00").getTime();
     const weekEnd = weekStart + 7 * 24 * 60 * 60 * 1000;
 
     try {
       const [apptRes, blockerRes, settingsRes] = await Promise.all([
-        fetch(`/api/appointments?from=${weekStart}&to=${weekEnd}`),
-        fetch(`/api/blockers?from=${weekStart}&to=${weekEnd}`),
-        fetch("/api/settings"),
+        fetch(`/api/appointments?from=${weekStart}&to=${weekEnd}`, { signal }),
+        fetch(`/api/blockers?from=${weekStart}&to=${weekEnd}`, { signal }),
+        fetch("/api/settings", { signal }),
       ]);
 
       if (apptRes.ok) setAppointments(await apptRes.json());
       if (blockerRes.ok) setBlockers(await blockerRes.json());
       if (settingsRes.ok) setSettings(await settingsRes.json());
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       console.error("Failed to load week data:", err);
+      setError("Daten konnten nicht geladen werden");
     } finally {
       setLoading(false);
     }
   }, [monday]);
 
   useEffect(() => {
-    fetchData();
+    const controller = new AbortController();
+    fetchData(controller.signal);
+    return () => controller.abort();
   }, [fetchData]);
 
   function navigateWeek(offset: number) {
@@ -204,7 +186,17 @@ export default function WeekView({
       </div>
 
       <div className="flex-1 min-h-0 overflow-auto">
-        {loading ? (
+        {error ? (
+          <div className="text-center py-12">
+            <p className="text-red-600 mb-3">{error}</p>
+            <button
+              onClick={() => fetchData()}
+              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              Erneut versuchen
+            </button>
+          </div>
+        ) : loading ? (
           <div className="text-center py-12 text-gray-400">Laden...</div>
         ) : (
           <div className="flex min-h-full">

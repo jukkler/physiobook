@@ -29,6 +29,10 @@ export const PATCH = withApiAuth(async (req, ctx) => {
   const url = new URL(req.url);
   const scope = url.searchParams.get("scope") || "single";
 
+  if (scope !== "single" && scope !== "future") {
+    return Response.json({ error: "scope muss 'single' oder 'future' sein" }, { status: 400 });
+  }
+
   const db = getDb();
   const existing = db
     .prepare("SELECT * FROM appointments WHERE id = ?")
@@ -116,35 +120,38 @@ export const PATCH = withApiAuth(async (req, ctx) => {
   }
 
   if (scope === "future" && existing.series_id) {
-    // Update all future appointments in the series
+    // Update all future appointments in the series (single transaction)
     const seriesId = existing.series_id as string;
     const currentStart = existing.start_time as number;
 
-    db.prepare(
-      `UPDATE appointments SET
-        patient_name = COALESCE(?, patient_name),
-        duration_minutes = COALESCE(?, duration_minutes),
-        contact_email = COALESCE(?, contact_email),
-        contact_phone = COALESCE(?, contact_phone),
-        updated_at = ?
-      WHERE series_id = ? AND start_time >= ?`
-    ).run(
-      body.patientName || null,
-      body.durationMinutes || null,
-      body.contactEmail ?? null,
-      body.contactPhone ?? null,
-      now, seriesId, currentStart
-    );
-
-    // If duration changed, update endTime for all affected
-    if (body.durationMinutes) {
+    const updateFuture = db.transaction(() => {
       db.prepare(
         `UPDATE appointments SET
-          end_time = start_time + ? * 60000,
+          patient_name = COALESCE(?, patient_name),
+          duration_minutes = COALESCE(?, duration_minutes),
+          contact_email = COALESCE(?, contact_email),
+          contact_phone = COALESCE(?, contact_phone),
           updated_at = ?
         WHERE series_id = ? AND start_time >= ?`
-      ).run(body.durationMinutes, now, seriesId, currentStart);
-    }
+      ).run(
+        body.patientName || null,
+        body.durationMinutes || null,
+        body.contactEmail ?? null,
+        body.contactPhone ?? null,
+        now, seriesId, currentStart
+      );
+
+      // If duration changed, update endTime for all affected
+      if (body.durationMinutes) {
+        db.prepare(
+          `UPDATE appointments SET
+            end_time = start_time + ? * 60000,
+            updated_at = ?
+          WHERE series_id = ? AND start_time >= ?`
+        ).run(body.durationMinutes, now, seriesId, currentStart);
+      }
+    });
+    updateFuture();
 
     return Response.json({ ok: true });
   }
@@ -160,6 +167,10 @@ export const DELETE = withApiAuth(async (req, ctx) => {
   const { id } = await ctx.params;
   const url = new URL(req.url);
   const scope = url.searchParams.get("scope") || "single";
+
+  if (scope !== "single" && scope !== "series") {
+    return Response.json({ error: "scope muss 'single' oder 'series' sein" }, { status: 400 });
+  }
 
   const db = getDb();
   const existing = db

@@ -41,6 +41,35 @@ export const PATCH = withApiAuth(async (req) => {
     "adminNotifyEmail",
   ];
 
+  // Validate values
+  const timeKeys = ["morningStart", "morningEnd", "afternoonStart", "afternoonEnd"];
+  const intKeys = ["requestTimeoutHours", "retentionDaysExpired", "retentionDaysPast"];
+
+  for (const [key, value] of Object.entries(body)) {
+    if (!allowedKeys.includes(key)) continue;
+
+    if (timeKeys.includes(key) && !/^\d{2}:\d{2}$/.test(value)) {
+      return Response.json({ error: `${key} muss im Format HH:MM sein` }, { status: 400 });
+    }
+
+    if (key === "slotDuration" && ![15, 30, 45, 60].includes(Number(value))) {
+      return Response.json({ error: "slotDuration muss 15, 30, 45 oder 60 sein" }, { status: 400 });
+    }
+
+    if (intKeys.includes(key)) {
+      const num = Number(value);
+      if (!Number.isInteger(num) || num < 1) {
+        return Response.json({ error: `${key} muss eine positive Ganzzahl sein` }, { status: 400 });
+      }
+    }
+
+    if (key === "adminNotifyEmail" && value !== "") {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        return Response.json({ error: "Ungültige E-Mail-Adresse" }, { status: 400 });
+      }
+    }
+  }
+
   const db = getDb();
 
   for (const [key, value] of Object.entries(body)) {

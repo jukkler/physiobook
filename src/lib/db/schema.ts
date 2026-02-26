@@ -95,18 +95,24 @@ export const settings = sqliteTable("settings", {
 
 // --- Email Outbox ---
 
-export const emailOutbox = sqliteTable("email_outbox", {
-  id: text("id").primaryKey(),
-  toAddress: text("to_address").notNull(),
-  subject: text("subject").notNull(),
-  html: text("html").notNull(),
-  status: text("status", {
-    enum: ["PENDING", "SENT", "FAILED"],
-  }).notNull(),
-  attempts: integer("attempts").notNull().default(0),
-  createdAt: integer("created_at").notNull(), // epoch ms
-  sentAt: integer("sent_at"), // epoch ms, nullable
-});
+export const emailOutbox = sqliteTable(
+  "email_outbox",
+  {
+    id: text("id").primaryKey(),
+    toAddress: text("to_address").notNull(),
+    subject: text("subject").notNull(),
+    html: text("html").notNull(),
+    status: text("status", {
+      enum: ["PENDING", "SENT", "FAILED"],
+    }).notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    createdAt: integer("created_at").notNull(), // epoch ms
+    sentAt: integer("sent_at"), // epoch ms, nullable
+  },
+  (table) => [
+    index("idx_email_outbox_status_created").on(table.status, table.createdAt),
+  ]
+);
 
 // --- Type exports ---
 

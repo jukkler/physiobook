@@ -75,19 +75,22 @@ export const POST = withApiAuth(async (req) => {
     const duration = endTime - startTime;
     const created: string[] = [];
 
-    for (let i = 0; i < count; i++) {
-      const offset = i * intervalDays * 24 * 60 * 60 * 1000;
-      const id = uuidv4();
+    const insertAll = getDb().transaction(() => {
+      for (let i = 0; i < count; i++) {
+        const offset = i * intervalDays * 24 * 60 * 60 * 1000;
+        const id = uuidv4();
 
-      getDb()
-        .prepare(
-          `INSERT INTO blockers (id, title, start_time, end_time, blocker_group_id, created_at)
-           VALUES (?, ?, ?, ?, ?, ?)`
-        )
-        .run(id, title, startTime + offset, startTime + offset + duration, groupId, now);
+        getDb()
+          .prepare(
+            `INSERT INTO blockers (id, title, start_time, end_time, blocker_group_id, created_at)
+             VALUES (?, ?, ?, ?, ?, ?)`
+          )
+          .run(id, title, startTime + offset, startTime + offset + duration, groupId, now);
 
-      created.push(id);
-    }
+        created.push(id);
+      }
+    });
+    insertAll();
 
     return Response.json({ blockerGroupId: groupId, created }, { status: 201 });
   }
