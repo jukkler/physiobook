@@ -46,6 +46,7 @@ export default function AppointmentForm({
   const [deleteScope, setDeleteScope] = useState<"single" | "series">("single");
   const [isSeries, setIsSeries] = useState(false);
   const [seriesCount, setSeriesCount] = useState(6);
+  const [seriesInterval, setSeriesInterval] = useState(1);
 
   // Autocomplete
   const [suggestions, setSuggestions] = useState<PatientSuggestion[]>([]);
@@ -117,7 +118,7 @@ export default function AppointmentForm({
 
       if (!isEdit && isSeries) {
         const dayOfWeek = new Date(startTimeMs).getUTCDay();
-        payload.series = { dayOfWeek, count: seriesCount };
+        payload.series = { dayOfWeek, count: seriesCount, intervalWeeks: seriesInterval };
       }
 
       const url = isEdit ? `/api/appointments/${appointment.id}` : "/api/appointments";
@@ -277,23 +278,40 @@ export default function AppointmentForm({
                   onChange={(e) => setIsSeries(e.target.checked)}
                   className="rounded"
                 />
-                Serientermin (wöchentlich wiederholen)
+                Serientermin (wiederholen)
               </label>
               {isSeries && (
-                <div className="mt-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Anzahl Wochen
-                  </label>
-                  <input
-                    type="number"
-                    min={2}
-                    max={52}
-                    value={seriesCount}
-                    onChange={(e) => setSeriesCount(Math.max(2, Math.min(52, Number(e.target.value))))}
-                    className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <p className="text-xs text-gray-400 mt-1">
-                    Erstellt {seriesCount} Termine im wöchentlichen Abstand
+                <div className="mt-2 space-y-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Intervall
+                    </label>
+                    <select
+                      value={seriesInterval}
+                      onChange={(e) => setSeriesInterval(Number(e.target.value))}
+                      className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value={1}>Wöchentlich</option>
+                      <option value={2}>Alle 2 Wochen</option>
+                      <option value={3}>Alle 3 Wochen</option>
+                      <option value={4}>Alle 4 Wochen</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Anzahl Termine
+                    </label>
+                    <input
+                      type="number"
+                      min={2}
+                      max={52}
+                      value={seriesCount}
+                      onChange={(e) => setSeriesCount(Math.max(2, Math.min(52, Number(e.target.value))))}
+                      className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-400">
+                    Erstellt {seriesCount} Termine {seriesInterval === 1 ? "im wöchentlichen Abstand" : `alle ${seriesInterval} Wochen`}
                   </p>
                 </div>
               )}

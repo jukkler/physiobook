@@ -20,7 +20,8 @@ CREATE TABLE `appointments_new` (
 	CHECK((`end_time` - `start_time`) = `duration_minutes` * 60000)
 );
 --> statement-breakpoint
-INSERT INTO `appointments_new` SELECT * FROM `appointments`;
+INSERT INTO `appointments_new` (`id`, `patient_name`, `start_time`, `end_time`, `duration_minutes`, `status`, `series_id`, `contact_email`, `contact_phone`, `notes`, `flagged_notes`, `reminder_sent`, `created_at`, `updated_at`)
+SELECT `id`, `patient_name`, `start_time`, `end_time`, `duration_minutes`, `status`, `series_id`, `contact_email`, `contact_phone`, `notes`, `flagged_notes`, `reminder_sent`, `created_at`, `updated_at` FROM `appointments`;
 --> statement-breakpoint
 DROP TABLE `appointments`;
 --> statement-breakpoint

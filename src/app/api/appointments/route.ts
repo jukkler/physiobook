@@ -43,7 +43,7 @@ export const POST = withApiAuth(async (req) => {
     contactPhone?: string;
     notes?: string;
     status?: string;
-    series?: { dayOfWeek: number; count: number };
+    series?: { dayOfWeek: number; count: number; intervalWeeks?: number };
   };
 
   try {
@@ -91,7 +91,8 @@ export const POST = withApiAuth(async (req) => {
 
   // Series creation
   if (body.series) {
-    const { dayOfWeek, count } = body.series;
+    const { dayOfWeek, count, intervalWeeks } = body.series;
+    const interval = intervalWeeks && [1, 2, 3, 4].includes(intervalWeeks) ? intervalWeeks : 1;
     if (count < 1 || count > 52) {
       return Response.json({ error: "Serienanzahl muss zwischen 1 und 52 liegen" }, { status: 400 });
     }
@@ -103,7 +104,7 @@ export const POST = withApiAuth(async (req) => {
     let currentDate = new Date(startTime);
     for (let i = 0; i < count; i++) {
       if (i > 0) {
-        currentDate.setUTCDate(currentDate.getUTCDate() + 7);
+        currentDate.setUTCDate(currentDate.getUTCDate() + 7 * interval);
       }
       const slotStart = currentDate.getTime();
       slots.push({ start: slotStart, end: slotStart + durationMinutes * 60_000 });
