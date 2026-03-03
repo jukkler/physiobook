@@ -58,9 +58,9 @@ export const PATCH = withApiAuth(async (req, ctx) => {
     return Response.json({ error: "Ungültige Anfrage" }, { status: 400 });
   }
 
-  if (body.durationMinutes && ![15, 30, 45, 60].includes(body.durationMinutes)) {
+  if (body.durationMinutes && ![15, 30, 45, 60, 90].includes(body.durationMinutes)) {
     return Response.json(
-      { error: "durationMinutes muss 15, 30, 45 oder 60 sein" },
+      { error: "durationMinutes muss 15, 30, 45, 60 oder 90 sein" },
       { status: 400 }
     );
   }

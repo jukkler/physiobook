@@ -320,6 +320,7 @@ export default function WidgetPage() {
                 <option value={30}>30 Minuten</option>
                 <option value={45}>45 Minuten</option>
                 <option value={60}>60 Minuten</option>
+                <option value={90}>90 Minuten</option>
               </select>
             </div>
 

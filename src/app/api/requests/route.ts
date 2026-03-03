@@ -49,9 +49,9 @@ export async function POST(req: Request) {
     return Response.json({ error: "Telefonnummer darf max. 30 Zeichen lang sein" }, { status: 400 });
   }
 
-  if (![15, 30, 45, 60].includes(durationMinutes)) {
+  if (![15, 30, 45, 60, 90].includes(durationMinutes)) {
     return Response.json(
-      { error: "durationMinutes muss 15, 30, 45 oder 60 sein" },
+      { error: "durationMinutes muss 15, 30, 45, 60 oder 90 sein" },
       { status: 400 }
     );
   }

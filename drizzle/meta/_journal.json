@@ -36,6 +36,13 @@
       "when": 1772093300000,
       "tag": "0005_add_patients",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1772093400000,
+      "tag": "0006_add_90min_duration",
+      "breakpoints": true
     }
   ]
 }
