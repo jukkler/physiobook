@@ -12,6 +12,7 @@ interface AppointmentCardProps {
   contactEmail?: string | null;
   contactPhone?: string | null;
   notes?: string | null;
+  isLunchTime?: boolean;
   onConfirm?: (id: string) => void;
   onReject?: (id: string) => void;
   onClick?: (id: string) => void;
@@ -31,6 +32,13 @@ const STATUS_LABELS: Record<string, string> = {
   EXPIRED: "Verfallen",
 };
 
+const LUNCH_COLORS: Record<string, string> = {
+  CONFIRMED: "bg-teal-100 border-teal-300 text-teal-900",
+  REQUESTED: "bg-teal-50 border-teal-200 text-teal-800",
+  CANCELLED: "bg-gray-100 border-gray-300 text-gray-500 line-through",
+  EXPIRED: "bg-gray-100 border-gray-300 text-gray-400",
+};
+
 export default function AppointmentCard({
   id,
   patientName,
@@ -39,11 +47,13 @@ export default function AppointmentCard({
   durationMinutes,
   status,
   notes,
+  isLunchTime,
   onConfirm,
   onReject,
   onClick,
 }: AppointmentCardProps) {
-  const colorClass = STATUS_COLORS[status] || STATUS_COLORS.CONFIRMED;
+  const colors = isLunchTime ? LUNCH_COLORS : STATUS_COLORS;
+  const colorClass = colors[status] || colors.CONFIRMED;
 
   return (
     <div

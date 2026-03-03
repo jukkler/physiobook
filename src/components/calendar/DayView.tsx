@@ -90,6 +90,12 @@ export default function DayView({
   const afternoonEnd = settings?.afternoonEnd || "20:00";
   const slotDuration = parseInt(settings?.slotDuration || "30", 10);
 
+  // Mittagspause: Mo-Fr 13:00-15:00
+  const lunchStartMin = 13 * 60;
+  const lunchEndMin = 15 * 60;
+  const dayOfWeek = new Date(date + "T12:00:00Z").getUTCDay(); // 0=So, 1=Mo, ..., 5=Fr, 6=Sa
+  const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+
   function generateSlots(start: string, end: string) {
     const [startH, startM] = start.split(":").map(Number);
     const [endH, endM] = end.split(":").map(Number);
@@ -198,12 +204,19 @@ export default function DayView({
 
             const isEvenRow = slotIndex % 2 === 1;
 
+            // Mittagspause check
+            const slotEnd = slot.startMinutes + slotDuration;
+            const isLunch = isWeekday && slot.startMinutes >= lunchStartMin && slotEnd <= lunchEndMin;
+            const showLunchLabel = isLunch && slot.startMinutes === lunchStartMin;
+
             return (
               <div
                 key={slot.startMinutes}
                 className={`flex border-b border-gray-100 ${
                   hasBlocker
                     ? "bg-gray-200 cursor-pointer hover:bg-gray-300 transition-colors"
+                    : isLunch
+                    ? "bg-gray-100"
                     : isEvenRow
                     ? "bg-blue-100/60 hover:bg-blue-100 cursor-pointer"
                     : "hover:bg-blue-50 cursor-pointer"
@@ -221,7 +234,12 @@ export default function DayView({
                   {slot.label}
                 </div>
                 <div className="flex-1 px-1 flex items-center">
-                  {showBlockerLabel && (
+                  {showLunchLabel && (
+                    <div className="text-xs text-gray-400 italic">
+                      Mittagspause
+                    </div>
+                  )}
+                  {showBlockerLabel && !isLunch && (
                     <div className="text-xs text-gray-500 italic bg-gray-300 rounded px-1 py-0.5">
                       {slotBlocker!.title}
                     </div>
@@ -239,6 +257,11 @@ export default function DayView({
             const scale = slots.length / maxSlotCount;
             const topPct = ((startMin - columnStartMin) / totalMinutes) * scale * 100;
             const heightPct = ((endMin - startMin) / totalMinutes) * scale * 100;
+
+            // Check if appointment overlaps lunch break (Mo-Fr 13-15)
+            const apptStartMin = msToMinutes(a.startTime);
+            const apptEndMin = msToMinutes(a.endTime);
+            const apptInLunch = isWeekday && apptStartMin >= lunchStartMin && apptEndMin <= lunchEndMin;
 
             return (
               <div
@@ -259,6 +282,7 @@ export default function DayView({
                     endTime={a.endTime}
                     durationMinutes={a.durationMinutes}
                     status={a.status}
+                    isLunchTime={apptInLunch}
                     notes={a.notes}
                     onConfirm={handleConfirm}
                     onReject={handleReject}

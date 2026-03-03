@@ -1,6 +1,6 @@
 # PhysioBook
 
-Minimalistisches Terminbuch fuer Physiotherapiepraxen. Verwaltet Termine, Blocker, Patientenstammdaten und Patientenanfragen ueber ein Web-Interface. Keine Gesundheitsdaten -- nur organisatorische Kontaktdaten (DSGVO-konform).
+Digitales Terminbuch fuer Physiotherapiepraxen. Verwaltet Termine, Blocker, Patientenstammdaten und Patientenanfragen ueber ein Web-Interface. Keine Gesundheitsdaten -- nur organisatorische Kontaktdaten (DSGVO-konform).
 
 ---
 
@@ -21,13 +21,16 @@ Minimalistisches Terminbuch fuer Physiotherapiepraxen. Verwaltet Termine, Blocke
 
 ## Schnellstart (lokale Entwicklung)
 
+> Diese Schritte sind nur noetig, wenn du die App lokal auf deinem Rechner testen willst. Fuer den produktiven Betrieb auf einem Server siehe [Deployment](#deployment-auf-einem-server).
+
 ```bash
 # 1. Dependencies installieren
 npm install
 
-# 2. Environment-Variablen anlegen
+# 2. Konfigurationsdatei anlegen
 cp .env.example .env
-#    -> .env oeffnen und JWT_SECRET, LOGIN_SALT, CRON_SECRET auf sichere Werte setzen
+#    -> Die Datei .env mit einem Texteditor oeffnen und die Platzhalter ersetzen
+#       (Details siehe Abschnitt "Environment-Variablen")
 
 # 3. Datenbank einrichten
 npm run db:migrate
@@ -92,25 +95,45 @@ ecosystem.config.js     PM2-Konfiguration
 
 ---
 
-## Deployment (Hetzner VPS, Ubuntu 22.04/24.04)
+## Deployment auf einem Server
 
-> Schritt-fuer-Schritt-Anleitung fuer ein frisches Ubuntu-System.
+> Schritt-fuer-Schritt-Anleitung fuer ein frisches Ubuntu-System (z.B. Hetzner Cloud VPS). Jeder Schritt ist einzeln ausfuehrbar -- einfach die Befehle kopieren und im Terminal einfuegen.
 
-### 1. Server vorbereiten
+### Voraussetzungen
+
+- Ein Server mit **Ubuntu 22.04 oder 24.04** (z.B. Hetzner Cloud ab CX22)
+- Eine **Domain** (z.B. `termine.meine-praxis.de`), die per DNS (A-Record) auf die IP-Adresse des Servers zeigt
+- **SSH-Zugang** zum Server (z.B. ueber ein Terminal-Programm wie PuTTY oder das eingebaute Terminal auf Mac/Linux)
+- Optional: Ein **SMTP-Konto** fuer den E-Mail-Versand (z.B. von deinem Webhoster, Mailgun oder Postmark)
+
+### Schritt 1 -- Server-Software installieren
+
+Verbinde dich per SSH mit deinem Server und fuehre folgende Befehle aus. Diese installieren alle benoetigten Programme:
 
 ```bash
+# System auf den neuesten Stand bringen
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y curl git sqlite3 ufw nginx certbot python3-certbot-nginx
 
-# Node.js 20 LTS
+# Grundlegende Werkzeuge installieren
+sudo apt install -y curl git sqlite3 ufw nginx certbot python3-certbot-nginx
+```
+
+**Node.js** (die Laufzeitumgebung fuer die App) installieren:
+
+```bash
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
+```
 
-# PM2 (Prozessmanager)
+**PM2** installieren -- ein Programm, das die App im Hintergrund laufen laesst und sie automatisch neustartet, falls sie abstuerzt:
+
+```bash
 sudo npm install -g pm2
 ```
 
-### 2. Firewall einrichten
+### Schritt 2 -- Firewall einrichten
+
+Die Firewall sorgt dafuer, dass nur die noetigsten Ports offen sind (SSH + Web):
 
 ```bash
 sudo ufw allow OpenSSH
@@ -118,233 +141,382 @@ sudo ufw allow 'Nginx Full'
 sudo ufw enable
 ```
 
-### 3. App-Benutzer anlegen (empfohlen)
+Bei der Frage `Proceed with operation (y|n)?` mit **y** bestaetigen.
+
+### Schritt 3 -- Eigenen Benutzer fuer die App anlegen
+
+Aus Sicherheitsgruenden sollte die App nicht als `root` laufen. Erstelle einen eigenen Benutzer:
 
 ```bash
 sudo adduser --disabled-password --gecos "" physiobook
+```
+
+Wechsle zu diesem Benutzer (alle weiteren Befehle werden als `physiobook` ausgefuehrt):
+
+```bash
 sudo su - physiobook
 ```
 
-### 4. Code deployen
+### Schritt 4 -- Code herunterladen
 
 ```bash
 cd ~
 git clone <repo-url> physiobook
 cd physiobook
+
+# Abhaengigkeiten installieren
 npm ci --omit=dev
 npm install --save-dev drizzle-kit tsx
 ```
 
-### 5. Environment konfigurieren
+> `<repo-url>` durch die tatsaechliche Git-URL des Repositories ersetzen.
+
+### Schritt 5 -- Konfiguration (.env-Datei)
+
+Die App wird ueber eine Konfigurationsdatei namens `.env` gesteuert. Erstelle sie aus der Vorlage:
 
 ```bash
 cp .env.example .env
 nano .env
 ```
 
-Die wichtigsten Werte (siehe [Environment-Variablen](#environment-variablen) fuer die vollstaendige Liste):
+> **nano** ist ein einfacher Texteditor im Terminal. Aenderungen speichern: `Strg+O`, dann `Enter`. Editor beenden: `Strg+X`.
+
+Ersetze die Platzhalter mit deinen echten Werten. Hier ein Beispiel mit Erklaerungen:
 
 ```env
-# Sichere Zufallswerte generieren mit:  openssl rand -base64 32
-JWT_SECRET=<zufallswert>
-LOGIN_SALT=<zufallswert>
-CRON_SECRET=<zufallswert>
+# --- Datenbank ---
+DATABASE_PATH=./physiobook.sqlite
 
-# SMTP fuer E-Mail-Versand
+# --- Sicherheit ---
+# Fuer jeden der drei folgenden Werte brauchst du einen eigenen langen Zufallstext.
+# Erstelle ihn mit diesem Befehl (dreimal ausfuehren, jedes Mal einen anderen Wert eintragen):
+#   openssl rand -base64 32
+JWT_SECRET=hier-einen-langen-zufallstext-einfuegen
+LOGIN_SALT=hier-einen-anderen-zufallstext-einfuegen
+CRON_SECRET=und-noch-einen-dritten-zufallstext
+
+# --- E-Mail-Versand (SMTP) ---
+# Diese Daten bekommst du von deinem E-Mail-Anbieter (z.B. Webhoster, Mailgun, Postmark).
+# Wenn du (noch) keine E-Mails verschicken willst, lass die Werte leer --
+# die App funktioniert auch ohne, nur Erinnerungen und Archiv-Versand sind dann deaktiviert.
 SMTP_HOST=smtp.example.com
 SMTP_PORT=587
 SMTP_USER=praxis@example.com
-SMTP_PASS=<smtp-passwort>
+SMTP_PASS=dein-smtp-passwort
 SMTP_FROM="Praxis Muster <praxis@example.com>"
 
-# Domain der App (fuer CSRF-Schutz)
+# --- Domain ---
+# Die Domain, unter der die App erreichbar sein wird.
+# Wichtig fuer die Sicherheit: Nur Anfragen von dieser Domain werden akzeptiert.
 ALLOWED_ORIGIN=https://termine.meine-praxis.de
 
-# Hinter Nginx immer aktivieren
+# --- Widget (optional) ---
+# Nur noetig, wenn das Patienten-Widget auf einer ANDEREN Domain laeuft als die App.
+# Beispiel: App auf termine.meine-praxis.de, Widget eingebettet auf meine-praxis.de
+# Wenn beides auf der gleichen Domain laeuft, einfach leer lassen.
+WIDGET_ORIGIN=
+
+# --- Proxy ---
+# Immer auf "true" setzen, wenn die App hinter Nginx laeuft (was bei diesem Setup der Fall ist).
 TRUST_PROXY=true
 ```
 
-### 6. Datenbank einrichten
+### Schritt 6 -- Datenbank einrichten
 
 ```bash
+# Datenbank-Tabellen erstellen
 npx tsx src/lib/db/migrate.ts
-npx tsx scripts/seed.ts
 
-# Sofort das Standard-Passwort aendern:
-npx tsx scripts/reset-password.ts "EinSicheresPasswort123!"
+# Standard-Admin-Benutzer anlegen
+npx tsx scripts/seed.ts
 ```
 
-### 7. Build erstellen
+**Wichtig:** Aendere sofort das Standard-Passwort (`admin`):
+
+```bash
+npx tsx scripts/reset-password.ts "DeinSicheresPasswort123!"
+```
+
+### Schritt 7 -- App bauen
 
 ```bash
 npm run build
 
-# Statische Dateien in den Standalone-Build kopieren
+# Statische Dateien in den Build-Ordner kopieren (notwendiger Schritt bei Next.js)
 cp -r .next/static .next/standalone/.next/static
 cp -r public .next/standalone/public 2>/dev/null || true
 ```
 
-### 8. PM2 starten
+### Schritt 8 -- App mit PM2 starten
+
+PM2 haelt die App dauerhaft am Laufen -- auch nach einem Serverneustart.
 
 ```bash
+# Log-Verzeichnis anlegen
 mkdir -p logs
+
+# App starten
 pm2 start ecosystem.config.js
 
-# Pruefen
+# Pruefen, ob alles laeuft (Status sollte "online" sein)
 pm2 status
-pm2 logs physiobook --lines 20
+```
 
-# Autostart bei Server-Neustart
-pm2 startup    # den angezeigten sudo-Befehl ausfuehren
+Damit die App nach einem Server-Neustart automatisch wieder startet:
+
+```bash
+pm2 startup
+```
+
+PM2 zeigt jetzt einen Befehl an, der mit `sudo` beginnt. **Kopiere diesen Befehl und fuehre ihn aus** (dafuer musst du vorher mit `exit` zurueck zum Root-Benutzer wechseln und den Befehl dort ausfuehren, dann wieder `sudo su - physiobook`).
+
+Anschliessend den aktuellen Zustand speichern:
+
+```bash
 pm2 save
 ```
 
-### 9. Nginx konfigurieren
+### Schritt 9 -- Nginx einrichten
+
+Nginx ist der Webserver, der Anfragen aus dem Internet entgegennimmt und an die App weiterleitet. Wechsle zurueck zum Root-Benutzer (`exit`) und fuehre aus:
 
 ```bash
-sudo cp scripts/nginx.example.conf /etc/nginx/sites-available/physiobook
-sudo nano /etc/nginx/sites-available/physiobook
-#    -> server_name auf die eigene Domain setzen
+# Konfigurationsdatei kopieren
+sudo cp /home/physiobook/physiobook/scripts/nginx.example.conf /etc/nginx/sites-available/physiobook
 
+# Domain anpassen -- ersetze "praxis.example.com" durch deine echte Domain:
+sudo nano /etc/nginx/sites-available/physiobook
+```
+
+In der Datei findest du mehrere Stellen mit `praxis.example.com` -- aendere alle auf deine Domain (z.B. `termine.meine-praxis.de`).
+
+```bash
+# Konfiguration aktivieren
 sudo ln -s /etc/nginx/sites-available/physiobook /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
+
+# Pruefen und neu laden
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-### 10. SSL-Zertifikat (Let's Encrypt)
+### Schritt 10 -- SSL-Zertifikat (HTTPS)
+
+Damit die App ueber eine sichere Verbindung (https://) erreichbar ist, brauchst du ein SSL-Zertifikat. Let's Encrypt stellt kostenlose Zertifikate aus:
 
 ```bash
 sudo certbot --nginx -d termine.meine-praxis.de
-sudo certbot renew --dry-run   # Auto-Renewal testen
 ```
 
-### 11. Cron-Jobs einrichten
+> Ersetze `termine.meine-praxis.de` durch deine echte Domain. Certbot fragt nach einer E-Mail-Adresse fuer Benachrichtigungen -- gib dort eine gueltige Adresse ein.
 
-PhysioBook benoetigt einen regelmaessigen Cron-Aufruf. Dieser kuemmert sich um:
-- Terminerinnerungen (24h vorher per E-Mail)
-- E-Mail-Queue abarbeiten
-- Abgelaufene Anfragen markieren
-- DSGVO-Cleanup (alte Daten loeschen)
-- Auto-Archiv per E-Mail versenden
+Zertifikate werden automatisch erneuert. Zum Testen:
 
 ```bash
+sudo certbot renew --dry-run
+```
+
+### Schritt 11 -- Automatische Hintergrundaufgaben (Cron-Jobs)
+
+PhysioBook braucht einen regelmaessigen Hintergrund-Aufruf, damit folgende Dinge automatisch passieren:
+
+- **E-Mail-Erinnerungen** an Patienten (24 Stunden vor dem Termin)
+- **E-Mails verschicken** (die App sammelt E-Mails und verschickt sie gebuendelt)
+- **Abgelaufene Terminanfragen** automatisch als verfallen markieren
+- **Alte Daten loeschen** (DSGVO-Cleanup nach Aufbewahrungsfrist)
+- **PDF-Archiv per E-Mail** versenden (wenn in der Verwaltung konfiguriert)
+- **Datenbank-Backup** (taeglich eine Sicherungskopie erstellen)
+
+**So richtest du die automatischen Aufgaben ein:**
+
+Wechsle zum `physiobook`-Benutzer und oeffne den Cron-Editor:
+
+```bash
+sudo su - physiobook
 crontab -e
 ```
 
-Folgende Zeilen einfuegen:
+> Beim ersten Mal fragt das System nach einem Editor. Waehle **nano** (meist Nummer 1).
+
+Fuege am Ende der Datei folgende zwei Zeilen ein:
 
 ```cron
-# PhysioBook: alle 5 Minuten
+# PhysioBook Hintergrundaufgaben -- laeuft alle 5 Minuten
 */5 * * * * curl -sf -X POST -H "Authorization: Bearer DEIN_CRON_SECRET" http://127.0.0.1:3000/api/cron > /dev/null 2>&1
 
-# Datenbank-Backup: taeglich um 02:00
+# Datenbank-Backup -- laeuft taeglich um 02:00 Uhr nachts
 0 2 * * * /home/physiobook/physiobook/scripts/backup.sh >> /home/physiobook/physiobook/logs/backup.log 2>&1
 ```
 
-> `DEIN_CRON_SECRET` durch den Wert aus der `.env`-Datei ersetzen.
+**Wichtig:** Ersetze `DEIN_CRON_SECRET` durch den Wert, den du in der `.env`-Datei bei `CRON_SECRET=` eingetragen hast. Dieser Wert stellt sicher, dass nur dein Server die Hintergrundaufgaben ausloesen kann.
+
+Speichern (`Strg+O`, `Enter`) und Editor beenden (`Strg+X`).
+
+Abschliessend das Backup-Script ausfuehrbar machen:
 
 ```bash
-chmod +x scripts/backup.sh
+chmod +x ~/physiobook/scripts/backup.sh
 ```
 
-### 12. Fertig -- Health-Check
+**Pruefen ob es geklappt hat:** Mit `crontab -l` kannst du dir die eingerichteten Aufgaben anzeigen lassen. Du solltest die beiden Zeilen sehen.
+
+**Ergebnis:** Ab jetzt prueft die App alle 5 Minuten automatisch, ob E-Mails verschickt, Erinnerungen gesendet oder Daten aufgeraeumt werden muessen. Ausserdem wird jede Nacht um 2 Uhr ein Datenbank-Backup erstellt.
+
+### Schritt 12 -- Fertig! Alles pruefen
+
+Teste, ob die App laeuft:
 
 ```bash
 curl https://termine.meine-praxis.de/api/health
-# {"status":"ok","timestamp":"...","dbOk":true}
 ```
 
-Optional: UptimeRobot oder Hetzner-Monitoring auf diesen Endpunkt konfigurieren (alle 5 Minuten).
+Erwartete Antwort: `{"status":"ok","timestamp":"...","dbOk":true}`
+
+Oeffne jetzt `https://termine.meine-praxis.de` im Browser und melde dich mit deinem Passwort an.
+
+**Optional:** Richte ein kostenloses Monitoring ein (z.B. [UptimeRobot](https://uptimerobot.com)), das alle 5 Minuten den Health-Endpunkt prueft und dich per E-Mail benachrichtigt, falls die App nicht erreichbar ist.
 
 ---
 
 ## Wartung
 
-### Update deployen
+### App aktualisieren
+
+Wenn es ein Update gibt, fuehre folgende Befehle auf dem Server aus:
 
 ```bash
+sudo su - physiobook
 cd ~/physiobook
+
+# Neuen Code herunterladen
 git pull
+
+# Abhaengigkeiten aktualisieren
 npm ci --omit=dev
 npm install --save-dev drizzle-kit tsx
-npx tsx src/lib/db/migrate.ts          # neue Migrationen ausfuehren
+
+# Datenbank-Aenderungen uebernehmen (falls vorhanden)
+npx tsx src/lib/db/migrate.ts
+
+# App neu bauen
 npm run build
 cp -r .next/static .next/standalone/.next/static
 cp -r public .next/standalone/public 2>/dev/null || true
+
+# App neustarten
 pm2 restart physiobook
 ```
 
 ### Passwort zuruecksetzen
 
 ```bash
+sudo su - physiobook
+cd ~/physiobook
 npx tsx scripts/reset-password.ts "NeuesPasswort123!"
 ```
 
-Invalidiert automatisch alle bestehenden Sessions.
+Alle bestehenden Sitzungen werden automatisch abgemeldet.
 
 ### Backup
 
-```bash
-# Manuell ausfuehren
-./scripts/backup.sh
+Backups werden automatisch jede Nacht erstellt (siehe Schritt 11). Du findest sie im Ordner `~/physiobook/backups/` als `.sqlite.gz`-Dateien. Die letzten 30 werden aufbewahrt.
 
-# Backup wiederherstellen
+**Manuelles Backup erstellen:**
+
+```bash
+sudo su - physiobook
+cd ~/physiobook
+./scripts/backup.sh
+```
+
+**Backup wiederherstellen:**
+
+```bash
+sudo su - physiobook
+cd ~/physiobook
+
+# App stoppen
 pm2 stop physiobook
-gunzip -k backups/physiobook_20260219_020000.sqlite.gz
-cp backups/physiobook_20260219_020000.sqlite physiobook.sqlite
+
+# Backup entpacken und einsetzen (Dateinamen anpassen!)
+gunzip -k backups/physiobook_20260301_020000.sqlite.gz
+cp backups/physiobook_20260301_020000.sqlite physiobook.sqlite
+
+# App wieder starten
 pm2 start physiobook
 ```
 
-Backups liegen in `./backups/` als `.sqlite.gz`-Dateien. Die letzten 30 werden aufbewahrt.
-
 ### Logs pruefen
 
+Falls etwas nicht funktioniert, helfen die Logdateien bei der Fehlersuche:
+
 ```bash
-pm2 logs physiobook                         # Live-Logs
-tail -100 logs/pm2-out.log                  # Stdout
-tail -100 logs/pm2-error.log                # Stderr
-sudo tail -100 /var/log/nginx/access.log    # Nginx
-sudo tail -100 /var/log/nginx/error.log     # Nginx Fehler
+sudo su - physiobook
+cd ~/physiobook
+
+# Live-Logs der App anzeigen (mit Strg+C beenden)
+pm2 logs physiobook
+
+# Letzte 100 Zeilen der Log-Dateien anzeigen
+tail -100 logs/pm2-out.log
+tail -100 logs/pm2-error.log
+```
+
+Nginx-Logs (als Root-Benutzer):
+
+```bash
+sudo tail -100 /var/log/nginx/access.log
+sudo tail -100 /var/log/nginx/error.log
 ```
 
 ### E-Mails kommen nicht an?
 
+Pruefe den Status der E-Mail-Warteschlange:
+
 ```bash
-sqlite3 physiobook.sqlite \
-  "SELECT to_address, subject, status, attempts FROM email_outbox ORDER BY created_at DESC LIMIT 10;"
+sudo su - physiobook
+cd ~/physiobook
+sqlite3 physiobook.sqlite "SELECT to_address, subject, status, attempts FROM email_outbox ORDER BY created_at DESC LIMIT 10;"
 ```
 
 | Status | Bedeutung |
 |--------|-----------|
-| `PENDING` | Wartet auf naechsten Cron-Lauf |
+| `PENDING` | Wartet auf den naechsten Cron-Lauf (alle 5 Minuten) |
 | `SENT` | Erfolgreich versendet |
 | `FAILED` (attempts >= 3) | Dauerhaft fehlgeschlagen -- SMTP-Konfiguration pruefen |
 
+**Haeufige Ursachen:**
+- SMTP-Zugangsdaten falsch -- pruefe die Einstellungen in der Verwaltungsoberflaeche oder der `.env`-Datei
+- Cron-Job laeuft nicht -- pruefe mit `crontab -l`, ob die Aufgaben eingerichtet sind
+- Firewall blockiert ausgehende Verbindungen auf Port 587
+
 ### PM2 Kurzreferenz
 
-| Befehl | Beschreibung |
-|--------|-------------|
-| `pm2 status` | Status aller Apps |
-| `pm2 restart physiobook` | Neustart |
-| `pm2 stop physiobook` | Stoppen |
-| `pm2 logs physiobook` | Live-Logs |
-| `pm2 monit` | CPU/RAM-Monitoring |
+| Befehl | Was passiert? |
+|--------|--------------|
+| `pm2 status` | Zeigt an, ob die App laeuft |
+| `pm2 restart physiobook` | App neustarten |
+| `pm2 stop physiobook` | App stoppen |
+| `pm2 logs physiobook` | Live-Logs anzeigen |
+| `pm2 monit` | CPU- und RAM-Verbrauch anzeigen |
 
 ---
 
 ## Environment-Variablen
 
+Alle Einstellungen in der `.env`-Datei auf einen Blick:
+
 | Variable | Beschreibung | Beispiel |
 |----------|-------------|---------|
-| `DATABASE_PATH` | Pfad zur SQLite-Datei | `./physiobook.sqlite` |
-| `JWT_SECRET` | Geheimer Schluessel fuer JWT-Signierung | `openssl rand -base64 32` |
-| `LOGIN_SALT` | Salt fuer IP-Hashing (Rate-Limiting) | `openssl rand -base64 32` |
-| `CRON_SECRET` | Bearer-Token fuer den Cron-Endpunkt | `openssl rand -base64 32` |
-| `SMTP_HOST` | SMTP-Server | `smtp.example.com` |
-| `SMTP_PORT` | SMTP-Port | `587` |
-| `SMTP_USER` | SMTP-Benutzername | `praxis@example.com` |
-| `SMTP_PASS` | SMTP-Passwort | -- |
-| `SMTP_FROM` | Absender-Adresse | `"Praxis <praxis@example.com>"` |
-| `ALLOWED_ORIGIN` | Domain der App (CSRF-Schutz) | `https://termine.meine-praxis.de` |
-| `WIDGET_ORIGIN` | Widget-Domain, nur bei Cross-Origin noetig | leer bei Same-Origin |
-| `TRUST_PROXY` | `true` wenn hinter Nginx/Reverse-Proxy | `true` |
+| `DATABASE_PATH` | Pfad zur Datenbank-Datei | `./physiobook.sqlite` |
+| `JWT_SECRET` | Geheimer Schluessel fuer die Anmeldung (Zufallstext) | `openssl rand -base64 32` |
+| `LOGIN_SALT` | Schutz gegen Brute-Force-Angriffe (Zufallstext) | `openssl rand -base64 32` |
+| `CRON_SECRET` | Passwort fuer die Hintergrundaufgaben (Zufallstext) | `openssl rand -base64 32` |
+| `SMTP_HOST` | Adresse des E-Mail-Servers | `smtp.example.com` |
+| `SMTP_PORT` | Port des E-Mail-Servers | `587` |
+| `SMTP_USER` | Benutzername fuer den E-Mail-Server | `praxis@example.com` |
+| `SMTP_PASS` | Passwort fuer den E-Mail-Server | -- |
+| `SMTP_FROM` | Absendername und -adresse fuer E-Mails | `"Praxis <praxis@example.com>"` |
+| `ALLOWED_ORIGIN` | Domain, auf der die App laeuft | `https://termine.meine-praxis.de` |
+| `WIDGET_ORIGIN` | Domain des Widgets (nur bei separater Domain) | leer lassen bei gleicher Domain |
+| `TRUST_PROXY` | Immer `true` wenn hinter Nginx | `true` |

@@ -130,6 +130,16 @@ export default function WeekView({
     EXPIRED: "bg-gray-200 border-gray-300",
   };
 
+  const LUNCH_STATUS_COLORS: Record<string, string> = {
+    CONFIRMED: "bg-teal-200 border-teal-400",
+    REQUESTED: "bg-teal-100 border-teal-300",
+    CANCELLED: "bg-gray-200 border-gray-400",
+    EXPIRED: "bg-gray-200 border-gray-300",
+  };
+
+  const lunchStartMin = 13 * 60;
+  const lunchEndMin = 15 * 60;
+
   const todayStr = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Berlin",
   }).format(new Date());
@@ -251,6 +261,20 @@ export default function WeekView({
                       />
                     ))}
 
+                    {/* Mittagspause: Mo-Fr 13-15 Uhr */}
+                    {dayIdx < 5 && (() => {
+                      const lunchTopPct = ((13 - startH) / totalHours) * 100;
+                      const lunchHeightPct = (2 / totalHours) * 100;
+                      return (
+                        <div
+                          className="absolute left-0 right-0 bg-gray-200/60 flex items-center justify-center pointer-events-none"
+                          style={{ top: `${lunchTopPct}%`, height: `${lunchHeightPct}%` }}
+                        >
+                          <span className="text-xs text-gray-400 italic">Mittag</span>
+                        </div>
+                      );
+                    })()}
+
                     {/* Blockers */}
                     {dayBlockers.map((b) => {
                       // Clamp blocker to this day's visible range for multi-day blockers
@@ -287,11 +311,23 @@ export default function WeekView({
                     })}
 
                     {/* Appointments */}
-                    {dayAppts.map((a) => (
+                    {dayAppts.map((a) => {
+                      const apptStartBerlin = new Intl.DateTimeFormat("en-GB", {
+                        timeZone: "Europe/Berlin", hour: "2-digit", minute: "2-digit", hour12: false,
+                      }).format(new Date(a.startTime));
+                      const apptEndBerlin = new Intl.DateTimeFormat("en-GB", {
+                        timeZone: "Europe/Berlin", hour: "2-digit", minute: "2-digit", hour12: false,
+                      }).format(new Date(a.endTime));
+                      const [aH, aM] = apptStartBerlin.split(":").map(Number);
+                      const [eH, eM] = apptEndBerlin.split(":").map(Number);
+                      const apptInLunch = dayIdx < 5 && (aH * 60 + aM) >= lunchStartMin && (eH * 60 + eM) <= lunchEndMin;
+                      const palette = apptInLunch ? LUNCH_STATUS_COLORS : STATUS_COLORS;
+
+                      return (
                       <div
                         key={a.id}
                         className={`absolute left-0 right-0 border-l-2 rounded-r-sm mx-0.5 px-0.5 overflow-hidden ${
-                          STATUS_COLORS[a.status] || STATUS_COLORS.CONFIRMED
+                          palette[a.status] || palette.CONFIRMED
                         }`}
                         style={{
                           top: `${getSlotPosition(a.startTime)}%`,
@@ -306,7 +342,8 @@ export default function WeekView({
                           {formatBerlinTime(a.startTime)}
                         </span>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               );
