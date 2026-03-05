@@ -1,15 +1,14 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { todayBerlin, getIsoWeekNumber } from "@/lib/time";
+import PdfImportPanel from "@/components/verwaltung/PdfImportPanel";
+import ArchiveDownloadPanel from "@/components/verwaltung/ArchiveDownloadPanel";
+import SmtpSettingsPanel from "@/components/verwaltung/SmtpSettingsPanel";
+import ReminderSettingsPanel from "@/components/verwaltung/ReminderSettingsPanel";
+import AutoArchivePanel from "@/components/verwaltung/AutoArchivePanel";
 
 export default function VerwaltungClient() {
-  const todayBerlin = () => {
-    const now = new Date();
-    return new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Europe/Berlin",
-    }).format(now);
-  };
-
   const [date, setDate] = useState(todayBerlin);
   const [downloading, setDownloading] = useState<string | null>(null);
 
@@ -268,11 +267,7 @@ export default function VerwaltungClient() {
     const sunday = new Date(monday);
     sunday.setUTCDate(monday.getUTCDate() + 6);
 
-    // ISO week number
-    const temp = new Date(Date.UTC(monday.getUTCFullYear(), monday.getUTCMonth(), monday.getUTCDate()));
-    temp.setUTCDate(temp.getUTCDate() + 4 - (temp.getUTCDay() || 7));
-    const yearStart = new Date(Date.UTC(temp.getUTCFullYear(), 0, 1));
-    const weekNum = Math.ceil(((temp.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+    const weekNum = getIsoWeekNumber(dateStr);
 
     const fmt = (d: Date) =>
       new Intl.DateTimeFormat("de-DE", {
@@ -310,6 +305,10 @@ export default function VerwaltungClient() {
     }
   }
 
+  function handleAutoArchiveChange(updates: Record<string, string>) {
+    setAutoArchive((prev) => ({ ...prev, ...updates }));
+  }
+
   const weekInfo = getWeekInfo(date);
   const monthInfo = getMonthInfo(date);
   const yearInfo = getYearInfo(date);
@@ -328,404 +327,59 @@ export default function VerwaltungClient() {
         />
       </div>
 
-      {/* PDF Termin-Import */}
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
-        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
-          Termine aus PDF importieren
-        </h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Lade eine Archiv-PDF hoch, um Termine wiederherzustellen.
-        </p>
-        <input
-          ref={pdfInputRef}
-          type="file"
-          accept=".pdf"
-          onChange={(e) => handlePdfImport(e)}
-          className="hidden"
-        />
-        <div className="flex gap-2">
-          <button
-            onClick={() => pdfInputRef.current?.click()}
-            disabled={pdfImporting}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            {pdfImporting ? "Importiere..." : "PDF hochladen"}
-          </button>
-        </div>
-        {pdfMessage && (
-          <p className={`mt-3 text-sm ${pdfMessage.type === "success" ? "text-green-600" : "text-red-600"}`}>
-            {pdfMessage.text}
-          </p>
-        )}
-        {pdfDebug && (
-          <pre className="mt-3 text-xs bg-gray-100 p-3 rounded overflow-auto max-h-64 whitespace-pre-wrap">
-            {pdfDebug}
-          </pre>
-        )}
-      </div>
+      <PdfImportPanel
+        pdfInputRef={pdfInputRef}
+        pdfImporting={pdfImporting}
+        pdfMessage={pdfMessage}
+        pdfDebug={pdfDebug}
+        onImport={(e) => handlePdfImport(e)}
+        onUploadClick={() => pdfInputRef.current?.click()}
+      />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        {/* Week */}
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
-          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
-            Wochenarchiv
-          </h3>
-          <p className="text-lg font-medium text-gray-900 mb-4">
-            {weekInfo.label}
-          </p>
-          <button
-            onClick={() => handleDownload("week")}
-            disabled={downloading === "week"}
-            className="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            {downloading === "week" ? "Wird erstellt..." : "PDF herunterladen"}
-          </button>
-        </div>
+      <ArchiveDownloadPanel
+        weekLabel={weekInfo.label}
+        monthLabel={monthInfo.label}
+        yearLabel={yearInfo.label}
+        downloading={downloading}
+        onDownload={handleDownload}
+      />
 
-        {/* Month */}
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
-          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
-            Monatsarchiv
-          </h3>
-          <p className="text-lg font-medium text-gray-900 mb-4">
-            {monthInfo.label}
-          </p>
-          <button
-            onClick={() => handleDownload("month")}
-            disabled={downloading === "month"}
-            className="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            {downloading === "month" ? "Wird erstellt..." : "PDF herunterladen"}
-          </button>
-        </div>
+      <SmtpSettingsPanel
+        smtpSettings={smtpSettings}
+        smtpLoaded={smtpLoaded}
+        smtpSaving={smtpSaving}
+        smtpMessage={smtpMessage}
+        testEmail={testEmail}
+        testSending={testSending}
+        testMessage={testMessage}
+        onSmtpChange={updateSmtp}
+        onSmtpSave={handleSmtpSave}
+        onTestEmailChange={setTestEmail}
+        onTestEmailSend={handleTestEmail}
+      />
 
-        {/* Year */}
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
-          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
-            Jahresarchiv
-          </h3>
-          <p className="text-lg font-medium text-gray-900 mb-4">
-            {yearInfo.label}
-          </p>
-          <button
-            onClick={() => handleDownload("year")}
-            disabled={downloading === "year"}
-            className="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            {downloading === "year" ? "Wird erstellt..." : "PDF herunterladen"}
-          </button>
-        </div>
-      </div>
+      <ReminderSettingsPanel
+        reminderEnabled={reminderEnabled}
+        reminderSaving={reminderSaving}
+        reminderMessage={reminderMessage}
+        emailListOpen={emailListOpen}
+        emailList={emailList}
+        emailListLoading={emailListLoading}
+        onToggle={() => setReminderEnabled((prev) => (prev === "true" ? "false" : "true"))}
+        onSave={handleReminderSave}
+        onToggleEmailList={loadEmailList}
+      />
 
-      {/* Email / SMTP Settings */}
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
-        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
-          E-Mail-Einstellungen
-        </h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Postausgangsserver (SMTP) f&uuml;r den Versand von Benachrichtigungen bei neuen Terminanfragen.
-        </p>
-        {smtpLoaded ? (
-          <div className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">SMTP-Server</label>
-                <input
-                  type="text"
-                  value={smtpSettings.smtpHost}
-                  onChange={(e) => updateSmtp("smtpHost", e.target.value)}
-                  placeholder="smtp.beispiel.de"
-                  className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Port</label>
-                <input
-                  type="number"
-                  value={smtpSettings.smtpPort}
-                  onChange={(e) => updateSmtp("smtpPort", e.target.value)}
-                  placeholder="587"
-                  className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Benutzername</label>
-                <input
-                  type="text"
-                  value={smtpSettings.smtpUser}
-                  onChange={(e) => updateSmtp("smtpUser", e.target.value)}
-                  placeholder="user@beispiel.de"
-                  className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Passwort</label>
-                <input
-                  type="password"
-                  value={smtpSettings.smtpPass}
-                  onChange={(e) => updateSmtp("smtpPass", e.target.value)}
-                  placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"
-                  className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Absenderadresse</label>
-                <input
-                  type="email"
-                  value={smtpSettings.smtpFrom}
-                  onChange={(e) => updateSmtp("smtpFrom", e.target.value)}
-                  placeholder="noreply@beispiel.de"
-                  className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Benachrichtigungs-E-Mail</label>
-                <input
-                  type="email"
-                  value={smtpSettings.adminNotifyEmail}
-                  onChange={(e) => updateSmtp("adminNotifyEmail", e.target.value)}
-                  placeholder="praxis@beispiel.de"
-                  className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleSmtpSave}
-                disabled={smtpSaving}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                {smtpSaving ? "Speichern..." : "Speichern"}
-              </button>
-              {smtpMessage && (
-                <span className={`text-sm ${smtpMessage.type === "success" ? "text-green-600" : "text-red-600"}`}>
-                  {smtpMessage.text}
-                </span>
-              )}
-            </div>
-
-            <div className="border-t border-gray-200 pt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Test-E-Mail versenden</label>
-              <div className="flex items-start gap-3">
-                <input
-                  type="email"
-                  value={testEmail}
-                  onChange={(e) => setTestEmail(e.target.value)}
-                  placeholder="empfaenger@beispiel.de"
-                  className="flex-1 px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  onClick={handleTestEmail}
-                  disabled={testSending || !testEmail}
-                  className="px-4 py-2 bg-gray-700 text-white text-sm font-medium rounded-md hover:bg-gray-800 disabled:opacity-50 transition-colors"
-                >
-                  {testSending ? "Senden..." : "Senden"}
-                </button>
-              </div>
-              {testMessage && (
-                <p className={`mt-2 text-sm ${testMessage.type === "success" ? "text-green-600" : "text-red-600"}`}>
-                  {testMessage.text}
-                </p>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="text-sm text-gray-400">Laden...</div>
-        )}
-      </div>
-
-      {/* Reminder Notifications */}
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
-        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
-          Termin-Erinnerungen
-        </h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Patienten erhalten 24 Stunden vor ihrem Termin eine Erinnerung per E-Mail.
-        </p>
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setReminderEnabled((prev) => (prev === "true" ? "false" : "true"))}
-              className={`relative w-11 h-6 rounded-full transition-colors ${
-                reminderEnabled === "true" ? "bg-blue-500" : "bg-gray-300"
-              }`}
-            >
-              <span
-                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                  reminderEnabled === "true" ? "translate-x-5" : ""
-                }`}
-              />
-            </button>
-            <span className="text-sm text-gray-700">
-              {reminderEnabled === "true" ? "Aktiviert" : "Deaktiviert"}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleReminderSave}
-              disabled={reminderSaving}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
-            >
-              {reminderSaving ? "Speichern..." : "Speichern"}
-            </button>
-            {reminderMessage && (
-              <span className={`text-sm ${reminderMessage.type === "success" ? "text-green-600" : "text-red-600"}`}>
-                {reminderMessage.text}
-              </span>
-            )}
-          </div>
-
-          <div className="border-t border-gray-200 pt-4">
-            <button
-              onClick={loadEmailList}
-              className="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
-            >
-              {emailListOpen ? "E-Mail-Adressen ausblenden" : "Vorhandene E-Mail-Adressen anzeigen"}
-            </button>
-            {emailListOpen && (
-              <div className="mt-3">
-                {emailListLoading ? (
-                  <p className="text-sm text-gray-400">Laden...</p>
-                ) : emailList.length === 0 ? (
-                  <p className="text-sm text-gray-500">Keine E-Mail-Adressen vorhanden.</p>
-                ) : (
-                  <ul className="space-y-1 max-h-48 overflow-y-auto">
-                    {emailList.map((email) => (
-                      <li key={email} className="text-sm text-gray-700 py-0.5">
-                        {email}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Auto-Archive Settings */}
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
-        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
-          Automatischer Archiv-Versand
-        </h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Terminarchive werden automatisch per E-Mail versendet.
-        </p>
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setAutoArchive((prev) => ({
-                ...prev,
-                autoArchiveEnabled: prev.autoArchiveEnabled === "true" ? "false" : "true",
-              }))}
-              className={`relative w-11 h-6 rounded-full transition-colors ${
-                autoArchive.autoArchiveEnabled === "true" ? "bg-blue-500" : "bg-gray-300"
-              }`}
-            >
-              <span
-                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                  autoArchive.autoArchiveEnabled === "true" ? "translate-x-5" : ""
-                }`}
-              />
-            </button>
-            <span className="text-sm text-gray-700">
-              {autoArchive.autoArchiveEnabled === "true" ? "Aktiviert" : "Deaktiviert"}
-            </span>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Intervall</label>
-              <select
-                value={autoArchive.autoArchiveInterval}
-                onChange={(e) => setAutoArchive((prev) => ({ ...prev, autoArchiveInterval: e.target.value }))}
-                className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="daily">T&auml;glich</option>
-                <option value="weekly">W&ouml;chentlich</option>
-                <option value="monthly">Monatlich</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Archiv-Typ</label>
-              <select
-                value={autoArchive.autoArchiveType}
-                onChange={(e) => setAutoArchive((prev) => ({ ...prev, autoArchiveType: e.target.value }))}
-                className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="week">Wochenarchiv</option>
-                <option value="month">Monatsarchiv</option>
-                <option value="year">Jahresarchiv</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Empf&auml;nger</label>
-              <input
-                type="email"
-                value={autoArchive.autoArchiveEmail}
-                onChange={(e) => setAutoArchive((prev) => ({ ...prev, autoArchiveEmail: e.target.value }))}
-                placeholder="archiv@beispiel.de"
-                className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Weitere E-Mail (Cron-Job)</label>
-              <input
-                type="email"
-                value={autoArchive.cronJobEmail}
-                onChange={(e) => setAutoArchive((prev) => ({ ...prev, cronJobEmail: e.target.value }))}
-                placeholder="cron@beispiel.de"
-                className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          <p className="text-xs text-gray-500">
-            {autoArchive.autoArchiveInterval === "daily"
-              ? "T\u00e4glich wird das ausgew\u00e4hlte Archiv versendet."
-              : autoArchive.autoArchiveInterval === "weekly"
-                ? "Jeden Montag wird das ausgew\u00e4hlte Archiv versendet."
-                : "Am 1. des Monats wird das ausgew\u00e4hlte Archiv versendet."}
-          </p>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleAutoArchiveSave}
-              disabled={autoArchiveSaving}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
-            >
-              {autoArchiveSaving ? "Speichern..." : "Speichern"}
-            </button>
-            {autoArchiveMessage && (
-              <span className={`text-sm ${autoArchiveMessage.type === "success" ? "text-green-600" : "text-red-600"}`}>
-                {autoArchiveMessage.text}
-              </span>
-            )}
-          </div>
-
-          <div className="border-t border-gray-200 pt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Test-Archiv versenden</label>
-            <p className="text-xs text-gray-500 mb-3">
-              Versendet das ausgew&auml;hlte Archiv sofort an die angegebene Empf&auml;ngeradresse.
-            </p>
-            <div className="flex items-start gap-3">
-              <button
-                onClick={handleTestArchive}
-                disabled={testArchiveSending || !autoArchive.autoArchiveEmail}
-                className="px-4 py-2 bg-gray-700 text-white text-sm font-medium rounded-md hover:bg-gray-800 disabled:opacity-50 transition-colors"
-              >
-                {testArchiveSending ? "Wird versendet..." : "Jetzt senden"}
-              </button>
-            </div>
-            {testArchiveMessage && (
-              <p className={`mt-2 text-sm ${testArchiveMessage.type === "success" ? "text-green-600" : "text-red-600"}`}>
-                {testArchiveMessage.text}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
+      <AutoArchivePanel
+        autoArchive={autoArchive}
+        autoArchiveSaving={autoArchiveSaving}
+        autoArchiveMessage={autoArchiveMessage}
+        testArchiveSending={testArchiveSending}
+        testArchiveMessage={testArchiveMessage}
+        onAutoArchiveChange={handleAutoArchiveChange}
+        onSave={handleAutoArchiveSave}
+        onTestArchive={handleTestArchive}
+      />
     </div>
   );
 }
