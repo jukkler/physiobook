@@ -141,6 +141,20 @@ export type Setting = typeof settings.$inferSelect;
 export type EmailOutboxEntry = typeof emailOutbox.$inferSelect;
 export type Patient = typeof patients.$inferSelect;
 
+// --- Derived union types ---
+
+export type AppointmentStatus = "REQUESTED" | "CONFIRMED" | "CANCELLED" | "EXPIRED";
+export type EmailOutboxStatus = "PENDING" | "SENT" | "FAILED";
+
+/** Frontend-shaped settings parsed from the key/value settings table. */
+export interface AppSettings {
+  morningStart: string;
+  morningEnd: string;
+  afternoonStart: string;
+  afternoonEnd: string;
+  slotDuration: string;
+}
+
 // --- CHECK constraints applied via custom SQL in migration ---
 // CHECK(end_time > start_time)
 // CHECK((end_time - start_time) = duration_minutes * 60000)

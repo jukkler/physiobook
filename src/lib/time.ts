@@ -159,3 +159,36 @@ export function dateTimeToEpoch(dateStr: string, timeStr: string): number {
 
   return Date.UTC(year, month - 1, day, hours, minutes, 0) - offsetMinutes * 60_000;
 }
+
+/**
+ * Get the first day of the month as "YYYY-MM-DD".
+ */
+export function getMonthStart(dateStr: string): string {
+  const [year, month] = dateStr.split("-").map(Number);
+  return `${year}-${String(month).padStart(2, "0")}-01`;
+}
+
+const MONTH_NAMES_DE = [
+  "Januar", "Februar", "März", "April", "Mai", "Juni",
+  "Juli", "August", "September", "Oktober", "November", "Dezember",
+];
+
+/**
+ * Get German month name + year, e.g. "März 2026".
+ */
+export function getMonthName(dateStr: string): string {
+  const [year, month] = dateStr.split("-").map(Number);
+  return `${MONTH_NAMES_DE[month - 1]} ${year}`;
+}
+
+/**
+ * Get the ISO 8601 week number for a date string.
+ * Works correctly for any date (not just Mondays).
+ */
+export function getIsoWeekNumber(dateStr: string): number {
+  const d = new Date(dateStr + "T12:00:00Z");
+  const temp = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  temp.setUTCDate(temp.getUTCDate() + 4 - (temp.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(temp.getUTCFullYear(), 0, 1));
+  return Math.ceil(((temp.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
