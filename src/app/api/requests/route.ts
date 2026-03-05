@@ -1,5 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { getDb } from "@/lib/db";
+import { escapeHtml } from "@/lib/html";
+import { isValidEmail, isValidDuration } from "@/lib/validation";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 // POST /api/requests - Public endpoint for patient appointment requests
@@ -49,7 +51,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "Telefonnummer darf max. 30 Zeichen lang sein" }, { status: 400 });
   }
 
-  if (![15, 30, 45, 60, 90].includes(durationMinutes)) {
+  if (!isValidDuration(durationMinutes)) {
     return Response.json(
       { error: "durationMinutes muss 15, 30, 45, 60 oder 90 sein" },
       { status: 400 }
@@ -64,7 +66,7 @@ export async function POST(req: Request) {
   }
 
   // Basic email validation
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) {
+  if (!isValidEmail(contactEmail)) {
     return Response.json(
       { error: "Ungültige E-Mail-Adresse" },
       { status: 400 }
@@ -156,12 +158,4 @@ export async function POST(req: Request) {
     },
     { status: 201 }
   );
-}
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }

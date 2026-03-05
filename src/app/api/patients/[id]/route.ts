@@ -1,6 +1,7 @@
 import { getDb } from "@/lib/db";
 import { withApiAuth } from "@/lib/auth";
 import { checkCsrf } from "@/lib/csrf";
+import { isValidEmail } from "@/lib/validation";
 
 // PATCH /api/patients/[id]
 export const PATCH = withApiAuth(async (req, ctx) => {
@@ -26,7 +27,7 @@ export const PATCH = withApiAuth(async (req, ctx) => {
     return Response.json({ error: "Name darf nicht leer sein (max. 100 Zeichen)" }, { status: 400 });
   }
 
-  if (body.email !== undefined && body.email !== "" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) {
+  if (body.email !== undefined && body.email !== "" && !isValidEmail(body.email)) {
     return Response.json({ error: "Ungültige E-Mail-Adresse" }, { status: 400 });
   }
 

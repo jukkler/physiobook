@@ -3,6 +3,7 @@ import { withApiAuth } from "@/lib/auth";
 import { checkCsrf } from "@/lib/csrf";
 import { hasConflicts } from "@/lib/overlap";
 import { filterNotes } from "@/lib/notes-filter";
+import { isValidDuration } from "@/lib/validation";
 
 // GET /api/appointments/[id]
 export const GET = withApiAuth(async (_req, ctx) => {
@@ -58,7 +59,7 @@ export const PATCH = withApiAuth(async (req, ctx) => {
     return Response.json({ error: "Ungültige Anfrage" }, { status: 400 });
   }
 
-  if (body.durationMinutes && ![15, 30, 45, 60, 90].includes(body.durationMinutes)) {
+  if (body.durationMinutes && !isValidDuration(body.durationMinutes)) {
     return Response.json(
       { error: "durationMinutes muss 15, 30, 45, 60 oder 90 sein" },
       { status: 400 }

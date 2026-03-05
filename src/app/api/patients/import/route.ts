@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import { getDb } from "@/lib/db";
 import { withApiAuth } from "@/lib/auth";
 import { checkCsrf } from "@/lib/csrf";
+import { isValidEmail } from "@/lib/validation";
 
 export const POST = withApiAuth(async (req) => {
   const csrf = checkCsrf(req);
@@ -77,7 +78,7 @@ export const POST = withApiAuth(async (req) => {
         continue;
       }
 
-      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      if (email && !isValidEmail(email)) {
         errors.push(`Zeile ${i + 2}: Ungültige E-Mail "${email}"`);
         continue;
       }

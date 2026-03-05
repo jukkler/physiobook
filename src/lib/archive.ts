@@ -7,6 +7,7 @@ import {
   formatBerlinDate,
   formatBerlinDateTime,
   epochToDateInput,
+  getIsoWeekNumber,
 } from "@/lib/time";
 import PDFDocument from "pdfkit";
 
@@ -46,11 +47,7 @@ export function computeRange(type: string, dateStr: string): { from: number; to:
     const from = berlinDayStartMs(monday);
     const to = berlinDayStartMs(addDays(monday, 7));
 
-    const d = new Date(monday + "T12:00:00Z");
-    const temp = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-    temp.setUTCDate(temp.getUTCDate() + 4 - (temp.getUTCDay() || 7));
-    const yearStart = new Date(Date.UTC(temp.getUTCFullYear(), 0, 1));
-    const weekNum = Math.ceil(((temp.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+    const weekNum = getIsoWeekNumber(monday);
 
     const fmtStart = formatBerlinDate(from);
     const fmtEnd = formatBerlinDate(berlinDayStartMs(sunday));

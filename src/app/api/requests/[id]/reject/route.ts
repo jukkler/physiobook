@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import { getDb } from "@/lib/db";
 import { withApiAuth } from "@/lib/auth";
 import { checkCsrf } from "@/lib/csrf";
+import { escapeHtml } from "@/lib/html";
 
 // POST /api/requests/[id]/reject - Idempotent
 export const POST = withApiAuth(async (req, ctx) => {
@@ -69,11 +70,3 @@ export const POST = withApiAuth(async (req, ctx) => {
 
   return Response.json({ ok: true, message: "Anfrage abgelehnt" });
 });
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}

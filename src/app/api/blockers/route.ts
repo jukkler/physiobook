@@ -1,7 +1,6 @@
-import { drizzle } from "drizzle-orm/better-sqlite3";
 import { and, gte, lt } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
-import { getDb } from "@/lib/db";
+import { getDb, getOrmDb } from "@/lib/db";
 import { blockers } from "@/lib/db/schema";
 import { withApiAuth } from "@/lib/auth";
 import { checkCsrf } from "@/lib/csrf";
@@ -19,7 +18,7 @@ export const GET = withApiAuth(async (req) => {
     );
   }
 
-  const db = drizzle(getDb());
+  const db = getOrmDb();
   const results = await db
     .select()
     .from(blockers)

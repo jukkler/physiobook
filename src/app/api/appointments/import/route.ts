@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { withApiAuth } from "@/lib/auth";
 import { checkCsrf } from "@/lib/csrf";
 import { dateTimeToEpoch } from "@/lib/time";
+import { syncPatient } from "@/lib/patients";
 
 const STATUS_MAP: Record<string, string> = {
   "bestätigt": "CONFIRMED",
@@ -168,15 +169,6 @@ export const POST = withApiAuth(async (req) => {
     `INSERT INTO appointments (id, patient_name, start_time, end_time, duration_minutes, status, series_id, contact_email, contact_phone, notes, flagged_notes, reminder_sent, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
-  const patientCheck = db.prepare(
-    "SELECT id, email, phone FROM patients WHERE name = ? COLLATE NOCASE"
-  );
-  const patientInsert = db.prepare(
-    `INSERT INTO patients (id, name, email, phone, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`
-  );
-  const patientUpdate = db.prepare(
-    "UPDATE patients SET email = ?, phone = ?, updated_at = ? WHERE id = ?"
-  );
 
   const importAll = db.transaction(() => {
     for (const apt of appointments) {
@@ -199,26 +191,7 @@ export const POST = withApiAuth(async (req) => {
       );
       imported++;
 
-      // Sync patient
-      const existing = patientCheck.get(apt.patientName) as
-        | { id: string; email: string | null; phone: string | null }
-        | undefined;
-      if (!existing) {
-        patientInsert.run(
-          uuidv4(),
-          apt.patientName,
-          apt.contactEmail,
-          apt.contactPhone,
-          now,
-          now
-        );
-      } else {
-        const newEmail = !existing.email && apt.contactEmail ? apt.contactEmail : existing.email;
-        const newPhone = !existing.phone && apt.contactPhone ? apt.contactPhone : existing.phone;
-        if (newEmail !== existing.email || newPhone !== existing.phone) {
-          patientUpdate.run(newEmail, newPhone, now, existing.id);
-        }
-      }
+      syncPatient(apt.patientName, apt.contactEmail, apt.contactPhone, now);
     }
   });
 

@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import { getDb } from "@/lib/db";
 import { withApiAuth } from "@/lib/auth";
 import { checkCsrf } from "@/lib/csrf";
+import { isValidEmail } from "@/lib/validation";
 
 // GET /api/patients?q=...
 export const GET = withApiAuth(async (req) => {
@@ -47,7 +48,7 @@ export const POST = withApiAuth(async (req) => {
     return Response.json({ error: "Name ist erforderlich (max. 100 Zeichen)" }, { status: 400 });
   }
 
-  if (body.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) {
+  if (body.email && !isValidEmail(body.email)) {
     return Response.json({ error: "Ungültige E-Mail-Adresse" }, { status: 400 });
   }
 

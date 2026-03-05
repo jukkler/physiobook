@@ -1,12 +1,12 @@
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import { getDb } from "@/lib/db";
+import { getDb, getOrmDb } from "@/lib/db";
 import { settings } from "@/lib/db/schema";
 import { withApiAuth } from "@/lib/auth";
 import { checkCsrf } from "@/lib/csrf";
+import { isValidEmail } from "@/lib/validation";
 
 // GET /api/settings
 export const GET = withApiAuth(async () => {
-  const db = drizzle(getDb());
+  const db = getOrmDb();
   const allSettings = await db.select().from(settings);
 
   const result: Record<string, string> = {};
@@ -75,7 +75,7 @@ export const PATCH = withApiAuth(async (req) => {
     }
 
     if (key === "adminNotifyEmail" && value !== "") {
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      if (!isValidEmail(value)) {
         return Response.json({ error: "Ungültige E-Mail-Adresse" }, { status: 400 });
       }
     }
@@ -88,7 +88,7 @@ export const PATCH = withApiAuth(async (req) => {
     }
 
     if (key === "smtpFrom" && value !== "") {
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      if (!isValidEmail(value)) {
         return Response.json({ error: "Ungültige Absender-E-Mail-Adresse" }, { status: 400 });
       }
     }
@@ -106,13 +106,13 @@ export const PATCH = withApiAuth(async (req) => {
     }
 
     if (key === "autoArchiveEmail" && value !== "") {
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      if (!isValidEmail(value)) {
         return Response.json({ error: "Ungültige Archiv-E-Mail-Adresse" }, { status: 400 });
       }
     }
 
     if (key === "cronJobEmail" && value !== "") {
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      if (!isValidEmail(value)) {
         return Response.json({ error: "Ungültige Cron-Job-E-Mail-Adresse" }, { status: 400 });
       }
     }
