@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { formatBerlinDate } from "@/lib/time";
+import { formatBerlinDate, berlinDayStartMs, dateTimeToEpoch } from "@/lib/time";
 import type { Appointment, Blocker, Settings } from "@/types/models";
 import AppointmentCard from "./AppointmentCard";
 
@@ -32,7 +32,7 @@ export default function DayView({
     setLoading(true);
     setError(null);
 
-    const dayStart = new Date(date + "T00:00:00+01:00").getTime();
+    const dayStart = berlinDayStartMs(date);
     const dayEnd = dayStart + 24 * 60 * 60 * 1000;
 
     try {
@@ -125,9 +125,7 @@ export default function DayView({
   function minutesToMs(minutes: number): number {
     const h = Math.floor(minutes / 60);
     const m = minutes % 60;
-    return new Date(
-      `${date}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00+01:00`
-    ).getTime();
+    return dateTimeToEpoch(date, `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
   }
 
   // Convert epoch ms to Berlin minutes-of-day

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { formatBerlinTime, getWeekMonday, addDays } from "@/lib/time";
+import { formatBerlinTime, getWeekMonday, addDays, berlinDayStartMs } from "@/lib/time";
 import type { Appointment, Blocker, Settings } from "@/types/models";
 
 interface WeekViewProps {
@@ -32,7 +32,7 @@ export default function WeekView({
   const fetchData = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
-    const weekStart = new Date(monday + "T00:00:00+01:00").getTime();
+    const weekStart = berlinDayStartMs(monday);
     const weekEnd = weekStart + 7 * 24 * 60 * 60 * 1000;
 
     try {
@@ -75,7 +75,7 @@ export default function WeekView({
   }
 
   function getAppointmentsForDay(dayDate: string): Appointment[] {
-    const dayStart = new Date(dayDate + "T00:00:00+01:00").getTime();
+    const dayStart = berlinDayStartMs(dayDate);
     const dayEnd = dayStart + 24 * 60 * 60 * 1000;
     return appointments.filter(
       (a) => a.startTime < dayEnd && a.endTime > dayStart
@@ -83,7 +83,7 @@ export default function WeekView({
   }
 
   function getBlockersForDay(dayDate: string): Blocker[] {
-    const dayStart = new Date(dayDate + "T00:00:00+01:00").getTime();
+    const dayStart = berlinDayStartMs(dayDate);
     const dayEnd = dayStart + 24 * 60 * 60 * 1000;
     return blockersList.filter(
       (b) => b.startTime < dayEnd && b.endTime > dayStart
