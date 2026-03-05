@@ -7,19 +7,14 @@ import WeekView from "./calendar/WeekView";
 import MonthView from "./calendar/MonthView";
 import AppointmentForm from "./forms/AppointmentForm";
 import BlockerForm from "./forms/BlockerForm";
-import { getWeekMonday, addDays, berlinDayStartMs, getMonthName } from "@/lib/time";
+import BlockerDeleteModal from "./dashboard/BlockerDeleteModal";
+import BulkDeleteModal from "./dashboard/BulkDeleteModal";
+import { getWeekMonday, addDays, berlinDayStartMs, getMonthName, todayBerlin } from "@/lib/time";
 import type { Appointment, Blocker } from "@/lib/db/schema";
 
 type ViewMode = "day" | "week" | "month";
 
 export default function DashboardClient() {
-  const todayBerlin = () => {
-    const now = new Date();
-    return new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Europe/Berlin",
-    }).format(now);
-  };
-
   const [date, setDate] = useState(todayBerlin);
   const [view, setView] = useState<ViewMode>("day");
   const [columnMode, setColumnMode] = useState<"split" | "single">("split");
@@ -310,102 +305,26 @@ export default function DashboardClient() {
       )}
 
       {deletingBlocker && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-sm">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-lg font-semibold text-gray-900">Blocker löschen</h2>
-              <button
-                onClick={() => setDeletingBlocker(null)}
-                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
-              >
-                &times;
-              </button>
-            </div>
-            <div className="p-4 space-y-4">
-              <p className="text-sm text-gray-700">
-                Blocker <strong>&quot;{deletingBlocker.title}&quot;</strong> wirklich löschen?
-              </p>
-
-              {deletingBlocker.blockerGroupId && (
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="radio"
-                      name="blockerDeleteScope"
-                      checked={deleteScope === "single"}
-                      onChange={() => setDeleteScope("single")}
-                    />
-                    <span className="text-gray-700">Nur diesen Blocker</span>
-                  </label>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="radio"
-                      name="blockerDeleteScope"
-                      checked={deleteScope === "group"}
-                      onChange={() => setDeleteScope("group")}
-                    />
-                    <span className="text-gray-700">Alle Blocker dieser Gruppe</span>
-                  </label>
-                </div>
-              )}
-
-              <div className="flex items-center gap-2 pt-2">
-                <button
-                  onClick={handleDeleteBlocker}
-                  disabled={deleting}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 disabled:opacity-50"
-                >
-                  {deleting ? "Löschen..." : "Löschen"}
-                </button>
-                <button
-                  onClick={() => setDeletingBlocker(null)}
-                  className="px-4 py-2 border text-sm rounded-md hover:bg-gray-50"
-                >
-                  Abbrechen
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <BlockerDeleteModal
+          blocker={deletingBlocker}
+          deleteScope={deleteScope}
+          deleting={deleting}
+          onScopeChange={setDeleteScope}
+          onConfirm={handleDeleteBlocker}
+          onClose={() => setDeletingBlocker(null)}
+        />
       )}
 
       {showBulkDelete && (() => {
         const { title, description } = getBulkDeleteLabel();
         return (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-sm">
-              <div className="flex items-center justify-between p-4 border-b">
-                <h2 className="text-lg font-semibold text-red-600">{title}</h2>
-                <button
-                  onClick={() => setShowBulkDelete(false)}
-                  className="text-gray-400 hover:text-gray-600 text-xl leading-none"
-                >
-                  &times;
-                </button>
-              </div>
-              <div className="p-4 space-y-4">
-                <p className="text-sm text-gray-700">
-                  <strong>{description}</strong> wirklich löschen?
-                </p>
-                <p className="text-xs text-red-500">Diese Aktion kann nicht rückgängig gemacht werden.</p>
-                <div className="flex items-center gap-2 pt-2">
-                  <button
-                    onClick={handleBulkDelete}
-                    disabled={bulkDeleting}
-                    className="flex-1 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 disabled:opacity-50"
-                  >
-                    {bulkDeleting ? "Löschen..." : title}
-                  </button>
-                  <button
-                    onClick={() => setShowBulkDelete(false)}
-                    className="px-4 py-2 border text-sm rounded-md hover:bg-gray-50"
-                  >
-                    Abbrechen
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <BulkDeleteModal
+            title={title}
+            description={description}
+            deleting={bulkDeleting}
+            onConfirm={handleBulkDelete}
+            onClose={() => setShowBulkDelete(false)}
+          />
         );
       })()}
 
