@@ -47,6 +47,7 @@ export default function AppointmentForm({
   const [isSeries, setIsSeries] = useState(false);
   const [seriesCount, setSeriesCount] = useState(6);
   const [seriesInterval, setSeriesInterval] = useState(1);
+  const [isPermanent, setIsPermanent] = useState(false);
 
   // Autocomplete
   const [suggestions, setSuggestions] = useState<PatientSuggestion[]>([]);
@@ -118,7 +119,8 @@ export default function AppointmentForm({
 
       if (!isEdit && isSeries) {
         const dayOfWeek = new Date(startTimeMs).getUTCDay();
-        payload.series = { dayOfWeek, count: seriesCount, intervalWeeks: seriesInterval };
+        const count = isPermanent ? 52 : seriesCount;
+        payload.series = { dayOfWeek, count, intervalWeeks: seriesInterval };
       }
 
       const url = isEdit ? `/api/appointments/${appointment.id}` : "/api/appointments";
@@ -297,6 +299,15 @@ export default function AppointmentForm({
                       <option value={4}>Alle 4 Wochen</option>
                     </select>
                   </div>
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isPermanent}
+                      onChange={(e) => setIsPermanent(e.target.checked)}
+                      className="rounded"
+                    />
+                    Dauerpatient
+                  </label>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Anzahl Termine
@@ -305,13 +316,16 @@ export default function AppointmentForm({
                       type="number"
                       min={2}
                       max={52}
-                      value={seriesCount}
+                      value={isPermanent ? 52 : seriesCount}
                       onChange={(e) => setSeriesCount(Math.max(2, Math.min(52, Number(e.target.value))))}
-                      className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled={isPermanent}
+                      className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isPermanent ? "bg-gray-100 text-gray-400 cursor-not-allowed" : ""}`}
                     />
                   </div>
                   <p className="text-xs text-gray-400">
-                    Erstellt {seriesCount} Termine {seriesInterval === 1 ? "im wöchentlichen Abstand" : `alle ${seriesInterval} Wochen`}
+                    {isPermanent
+                      ? `Erstellt 52 Termine ${seriesInterval === 1 ? "im wöchentlichen Abstand" : `alle ${seriesInterval} Wochen`} (1 Jahr)`
+                      : `Erstellt ${seriesCount} Termine ${seriesInterval === 1 ? "im wöchentlichen Abstand" : `alle ${seriesInterval} Wochen`}`}
                   </p>
                 </div>
               )}

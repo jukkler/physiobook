@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 export default function VerwaltungClient() {
   const todayBerlin = () => {
@@ -49,6 +49,44 @@ export default function VerwaltungClient() {
   const [emailListOpen, setEmailListOpen] = useState(false);
   const [emailList, setEmailList] = useState<string[]>([]);
   const [emailListLoading, setEmailListLoading] = useState(false);
+
+  // PDF import
+  const [pdfImporting, setPdfImporting] = useState(false);
+  const [pdfMessage, setPdfMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+
+  const [pdfDebug, setPdfDebug] = useState<string | null>(null);
+
+  async function handlePdfImport(e: React.ChangeEvent<HTMLInputElement>, debug = false) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPdfImporting(true);
+    setPdfMessage(null);
+    setPdfDebug(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      if (debug) formData.append("debug", "1");
+      const res = await fetch("/api/appointments/import", { method: "POST", body: formData });
+      const data = await res.json();
+      if (debug) {
+        setPdfDebug(data.rawText || JSON.stringify(data));
+        return;
+      }
+      if (!res.ok) {
+        setPdfMessage({ type: "error", text: data.error || "Import fehlgeschlagen" });
+      } else {
+        const msg = `${data.imported} Termine importiert.` +
+          (data.errors?.length ? ` ${data.errors.length} Fehler.` : "");
+        setPdfMessage({ type: "success", text: msg });
+      }
+    } catch {
+      setPdfMessage({ type: "error", text: "Netzwerkfehler beim Import" });
+    } finally {
+      setPdfImporting(false);
+      if (pdfInputRef.current) pdfInputRef.current.value = "";
+    }
+  }
 
   useEffect(() => {
     fetch("/api/settings")
@@ -288,6 +326,42 @@ export default function VerwaltungClient() {
           onChange={(e) => setDate(e.target.value)}
           className="px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
+      </div>
+
+      {/* PDF Termin-Import */}
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
+        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
+          Termine aus PDF importieren
+        </h3>
+        <p className="text-sm text-gray-600 mb-4">
+          Lade eine Archiv-PDF hoch, um Termine wiederherzustellen.
+        </p>
+        <input
+          ref={pdfInputRef}
+          type="file"
+          accept=".pdf"
+          onChange={(e) => handlePdfImport(e)}
+          className="hidden"
+        />
+        <div className="flex gap-2">
+          <button
+            onClick={() => pdfInputRef.current?.click()}
+            disabled={pdfImporting}
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            {pdfImporting ? "Importiere..." : "PDF hochladen"}
+          </button>
+        </div>
+        {pdfMessage && (
+          <p className={`mt-3 text-sm ${pdfMessage.type === "success" ? "text-green-600" : "text-red-600"}`}>
+            {pdfMessage.text}
+          </p>
+        )}
+        {pdfDebug && (
+          <pre className="mt-3 text-xs bg-gray-100 p-3 rounded overflow-auto max-h-64 whitespace-pre-wrap">
+            {pdfDebug}
+          </pre>
+        )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
