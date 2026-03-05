@@ -1,13 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import { getDb } from "./db";
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
+import { escapeHtml } from "@/lib/html";
 
 /**
  * Queue reminder emails for confirmed appointments starting within 24 hours.

@@ -1,8 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
-import { drizzle } from "drizzle-orm/better-sqlite3";
 import { eq } from "drizzle-orm";
-import { getDb } from "./db";
+import { getOrmDb } from "./db";
 import { adminUsers } from "./db/schema";
 
 const COOKIE_NAME = "physiobook_session";
@@ -57,7 +56,7 @@ export async function verifySession(
   if (!session) return null;
 
   // Check tokenVersion against DB
-  const db = drizzle(getDb());
+  const db = getOrmDb();
   const [user] = await db
     .select({ tokenVersion: adminUsers.tokenVersion })
     .from(adminUsers)
@@ -80,7 +79,7 @@ export async function verifySessionFromCookies(): Promise<Session | null> {
   if (!session) return null;
 
   // Check tokenVersion against DB
-  const db = drizzle(getDb());
+  const db = getOrmDb();
   const [user] = await db
     .select({ tokenVersion: adminUsers.tokenVersion })
     .from(adminUsers)
