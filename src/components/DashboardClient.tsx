@@ -4,11 +4,13 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import DayView from "./calendar/DayView";
 import WeekView from "./calendar/WeekView";
+import MonthView from "./calendar/MonthView";
 import AppointmentForm from "./forms/AppointmentForm";
 import BlockerForm from "./forms/BlockerForm";
-import type { Appointment, Blocker } from "@/types/models";
+import { getWeekMonday, addDays, berlinDayStartMs, getMonthName } from "@/lib/time";
+import type { Appointment, Blocker } from "@/lib/db/schema";
 
-type ViewMode = "day" | "week";
+type ViewMode = "day" | "week" | "month";
 
 export default function DashboardClient() {
   const todayBerlin = () => {
@@ -64,6 +66,8 @@ export default function DashboardClient() {
   const [deletingBlocker, setDeletingBlocker] = useState<Blocker | null>(null);
   const [deleteScope, setDeleteScope] = useState<"single" | "group">("single");
   const [deleting, setDeleting] = useState(false);
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // Refresh key to force re-fetch in child components
   const [refreshKey, setRefreshKey] = useState(0);
@@ -119,6 +123,55 @@ export default function DashboardClient() {
     }
   }
 
+  function getBulkDeleteRange(): { from: number; to: number } {
+    if (view === "day") {
+      const dayStart = berlinDayStartMs(date);
+      return { from: dayStart, to: dayStart + 24 * 60 * 60 * 1000 };
+    } else if (view === "week") {
+      const monday = getWeekMonday(date);
+      const weekStart = berlinDayStartMs(monday);
+      return { from: weekStart, to: weekStart + 7 * 24 * 60 * 60 * 1000 };
+    } else {
+      const [y, m] = date.split("-").map(Number);
+      const monthStart = berlinDayStartMs(`${y}-${String(m).padStart(2, "0")}-01`);
+      const nextMonth = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
+      const monthEnd = berlinDayStartMs(nextMonth);
+      return { from: monthStart, to: monthEnd };
+    }
+  }
+
+  function getBulkDeleteLabel(): { title: string; description: string } {
+    const fmt = (d: string) => d.split("-").reverse().slice(0, 2).join(".");
+    if (view === "day") {
+      return { title: "Tag löschen", description: `Alle Termine am ${fmt(date)}` };
+    } else if (view === "week") {
+      const m = getWeekMonday(date);
+      const s = addDays(m, 6);
+      return { title: "Woche löschen", description: `Alle Termine der Woche ${fmt(m)} – ${fmt(s)}` };
+    } else {
+      return { title: "Monat löschen", description: `Alle Termine im ${getMonthName(date)}` };
+    }
+  }
+
+  async function handleBulkDelete() {
+    setBulkDeleting(true);
+    try {
+      const { from, to } = getBulkDeleteRange();
+      const res = await fetch(
+        `/api/appointments/bulk?from=${from}&to=${to}`,
+        { method: "DELETE" }
+      );
+      if (res.ok) {
+        setShowBulkDelete(false);
+        setRefreshKey((k) => k + 1);
+      }
+    } catch {
+      // network error
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
   function handleDayClick(clickedDate: string) {
     setDate(clickedDate);
     setView("day");
@@ -149,6 +202,16 @@ export default function DashboardClient() {
           >
             Woche
           </button>
+          <button
+            onClick={() => setView("month")}
+            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+              view === "month"
+                ? "bg-white shadow text-gray-900 font-medium"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Monat
+          </button>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -167,6 +230,12 @@ export default function DashboardClient() {
           >
             + Blocker
           </button>
+          <button
+            onClick={() => setShowBulkDelete(true)}
+            className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
+          >
+            {view === "day" ? "Tag" : view === "week" ? "Woche" : "Monat"} löschen
+          </button>
         </div>
       </div>
 
@@ -182,9 +251,17 @@ export default function DashboardClient() {
             onEditAppointment={handleEditAppointment}
             onBlockerClick={handleBlockerClick}
           />
-        ) : (
+        ) : view === "week" ? (
           <WeekView
             key={`week-${refreshKey}`}
+            date={date}
+            onDateChange={setDate}
+            onDayClick={handleDayClick}
+            onBlockerClick={handleBlockerClick}
+          />
+        ) : (
+          <MonthView
+            key={`month-${refreshKey}`}
             date={date}
             onDateChange={setDate}
             onDayClick={handleDayClick}
@@ -291,6 +368,46 @@ export default function DashboardClient() {
           </div>
         </div>
       )}
+
+      {showBulkDelete && (() => {
+        const { title, description } = getBulkDeleteLabel();
+        return (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-sm">
+              <div className="flex items-center justify-between p-4 border-b">
+                <h2 className="text-lg font-semibold text-red-600">{title}</h2>
+                <button
+                  onClick={() => setShowBulkDelete(false)}
+                  className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                >
+                  &times;
+                </button>
+              </div>
+              <div className="p-4 space-y-4">
+                <p className="text-sm text-gray-700">
+                  <strong>{description}</strong> wirklich löschen?
+                </p>
+                <p className="text-xs text-red-500">Diese Aktion kann nicht rückgängig gemacht werden.</p>
+                <div className="flex items-center gap-2 pt-2">
+                  <button
+                    onClick={handleBulkDelete}
+                    disabled={bulkDeleting}
+                    className="flex-1 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {bulkDeleting ? "Löschen..." : title}
+                  </button>
+                  <button
+                    onClick={() => setShowBulkDelete(false)}
+                    className="px-4 py-2 border text-sm rounded-md hover:bg-gray-50"
+                  >
+                    Abbrechen
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {portalTarget && view === "day" && createPortal(
         <div className="flex items-center gap-2">

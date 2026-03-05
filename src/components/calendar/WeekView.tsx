@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { formatBerlinTime, getWeekMonday, addDays, berlinDayStartMs } from "@/lib/time";
-import type { Appointment, Blocker, Settings } from "@/types/models";
+import type { Appointment, Blocker, AppSettings as Settings } from "@/lib/db/schema";
 
 interface WeekViewProps {
   date: string; // any date in the week
