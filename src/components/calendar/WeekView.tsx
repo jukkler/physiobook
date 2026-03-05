@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { formatBerlinTime, getWeekMonday, addDays, berlinDayStartMs } from "@/lib/time";
+import { formatBerlinTime, getWeekMonday, addDays, berlinDayStartMs, getIsoWeekNumber, todayBerlin } from "@/lib/time";
 import type { Appointment, Blocker, AppSettings as Settings } from "@/lib/db/schema";
 
 interface WeekViewProps {
@@ -140,9 +140,7 @@ export default function WeekView({
   const lunchStartMin = 13 * 60;
   const lunchEndMin = 15 * 60;
 
-  const todayStr = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Berlin",
-  }).format(new Date());
+  const todayStr = todayBerlin();
 
   // Format date for display header
   function formatDayHeader(dayDate: string): string {
@@ -178,15 +176,7 @@ export default function WeekView({
           </button>
         </div>
         <h2 className="text-lg font-semibold text-gray-800">
-          KW{" "}
-          {(() => {
-            const d = new Date(monday + "T12:00:00Z");
-            // ISO week number
-            const temp = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-            temp.setUTCDate(temp.getUTCDate() + 4 - (temp.getUTCDay() || 7));
-            const yearStart = new Date(Date.UTC(temp.getUTCFullYear(), 0, 1));
-            return Math.ceil(((temp.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-          })()}
+          KW {getIsoWeekNumber(monday)}
           {" – "}
           {new Intl.DateTimeFormat("de-DE", {
             month: "long",
