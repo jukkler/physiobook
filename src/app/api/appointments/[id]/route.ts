@@ -1,7 +1,7 @@
 import { getDb } from "@/lib/db";
 import { withApiAuth } from "@/lib/auth";
 import { checkCsrf } from "@/lib/csrf";
-import { hasConflicts } from "@/lib/overlap";
+import { hasConflicts, findAppointmentConflictsExcludingSeries, findBlockerConflicts, hasOverlap } from "@/lib/overlap";
 import { filterNotes } from "@/lib/notes-filter";
 import { isValidDuration } from "@/lib/validation";
 
@@ -51,6 +51,7 @@ export const PATCH = withApiAuth(async (req, ctx) => {
     contactPhone?: string;
     notes?: string;
     status?: string;
+    force?: boolean;
   };
 
   try {
@@ -82,7 +83,7 @@ export const PATCH = withApiAuth(async (req, ctx) => {
     const newEnd = newStart + newDuration * 60_000;
 
     // Overlap check if time changed
-    if (body.startTime || body.durationMinutes) {
+    if (!body.force && (body.startTime || body.durationMinutes)) {
       if (hasConflicts(newStart, newEnd, id)) {
         return Response.json(
           { error: "Zeitkonflikt: Dieser Zeitraum ist bereits belegt" },
@@ -127,7 +128,59 @@ export const PATCH = withApiAuth(async (req, ctx) => {
     const seriesId = existing.series_id as string;
     const currentStart = existing.start_time as number;
 
+    // Calculate time-of-day shift if startTime changed
+    const timeDelta = body.startTime ? body.startTime - currentStart : 0;
+
+    // Conflict check for scope=future (unless force)
+    if (!body.force && (timeDelta !== 0 || body.durationMinutes)) {
+      // Load all future appointments in this series
+      const futureAppts = db
+        .prepare(
+          `SELECT id, start_time as startTime, end_time as endTime, duration_minutes as durationMinutes
+           FROM appointments
+           WHERE series_id = ? AND start_time >= ?`
+        )
+        .all(seriesId, currentStart) as { id: string; startTime: number; endTime: number; durationMinutes: number }[];
+
+      // Calculate new times for each appointment
+      const shifted = futureAppts.map((a) => {
+        const newStart = a.startTime + timeDelta;
+        const newDuration = body.durationMinutes || a.durationMinutes;
+        const newEnd = newStart + newDuration * 60_000;
+        return { newStart, newEnd };
+      });
+
+      // Get the full range across all shifted appointments
+      const rangeStart = Math.min(...shifted.map((s) => s.newStart));
+      const rangeEnd = Math.max(...shifted.map((s) => s.newEnd));
+
+      // Load all non-series appointments + blockers in the range (2 queries total)
+      const otherAppts = findAppointmentConflictsExcludingSeries(rangeStart, rangeEnd, seriesId);
+      const blockers = findBlockerConflicts(rangeStart, rangeEnd);
+
+      // Check each shifted appointment against loaded data
+      for (const s of shifted) {
+        for (const other of otherAppts) {
+          if (hasOverlap(s.newStart, s.newEnd, other.startTime, other.endTime)) {
+            return Response.json(
+              { error: "Zeitkonflikt: Dieser Zeitraum ist bereits belegt" },
+              { status: 409 }
+            );
+          }
+        }
+        for (const b of blockers) {
+          if (hasOverlap(s.newStart, s.newEnd, b.startTime, b.endTime)) {
+            return Response.json(
+              { error: "Zeitkonflikt: Dieser Zeitraum ist bereits belegt" },
+              { status: 409 }
+            );
+          }
+        }
+      }
+    }
+
     const updateFuture = db.transaction(() => {
+      // Update name, duration, contact fields
       db.prepare(
         `UPDATE appointments SET
           patient_name = COALESCE(?, patient_name),
@@ -144,14 +197,26 @@ export const PATCH = withApiAuth(async (req, ctx) => {
         now, seriesId, currentStart
       );
 
-      // If duration changed, update endTime for all affected
+      // If time changed, shift all future appointments by the same delta
+      if (timeDelta !== 0) {
+        db.prepare(
+          `UPDATE appointments SET
+            start_time = start_time + ?,
+            end_time = end_time + ?,
+            reminder_sent = 0,
+            updated_at = ?
+          WHERE series_id = ? AND start_time >= ?`
+        ).run(timeDelta, timeDelta, now, seriesId, currentStart);
+      }
+
+      // If duration changed, recalculate endTime for all affected
       if (body.durationMinutes) {
         db.prepare(
           `UPDATE appointments SET
             end_time = start_time + ? * 60000,
             updated_at = ?
           WHERE series_id = ? AND start_time >= ?`
-        ).run(body.durationMinutes, now, seriesId, currentStart);
+        ).run(body.durationMinutes, now, seriesId, currentStart + timeDelta);
       }
     });
     updateFuture();

@@ -29,6 +29,9 @@ export default function BlockerForm({
   const [seriesInterval, setSeriesInterval] = useState(7);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [showConflict, setShowConflict] = useState(false);
+  const [conflictMessage, setConflictMessage] = useState("");
+  const [pendingPayload, setPendingPayload] = useState<Record<string, unknown> | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -64,6 +67,14 @@ export default function BlockerForm({
         body: JSON.stringify(payload),
       });
 
+      if (res.status === 409) {
+        const data = await res.json();
+        setConflictMessage(data.error || "Zeitkonflikt mit bestehenden Terminen.");
+        setPendingPayload(payload);
+        setShowConflict(true);
+        return;
+      }
+
       if (!res.ok) {
         const data = await res.json();
         setError(data.error || "Fehler beim Erstellen");
@@ -75,6 +86,31 @@ export default function BlockerForm({
       setError("Netzwerkfehler");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleForceSubmit() {
+    if (!pendingPayload) return;
+    setSaving(true);
+    setShowConflict(false);
+    setError("");
+    try {
+      const res = await fetch("/api/blockers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...pendingPayload, force: true }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Fehler beim Erstellen");
+        return;
+      }
+      onSave();
+    } catch {
+      setError("Netzwerkfehler");
+    } finally {
+      setSaving(false);
+      setPendingPayload(null);
     }
   }
 
@@ -241,6 +277,38 @@ export default function BlockerForm({
           </div>
         </form>
       </div>
+
+      {showConflict && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-sm">
+            <div className="p-4 border-b">
+              <h3 className="text-lg font-semibold text-amber-600">Zeitkonflikt</h3>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-sm text-gray-700">
+                {conflictMessage} Trotzdem erstellen?
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleForceSubmit}
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-md hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {saving ? "Speichern..." : "Trotzdem erstellen"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowConflict(false); setPendingPayload(null); setConflictMessage(""); }}
+                  className="px-4 py-2 border text-sm rounded-md hover:bg-gray-50"
+                >
+                  Abbrechen
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

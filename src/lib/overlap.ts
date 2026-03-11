@@ -72,6 +72,27 @@ export function findBlockerConflicts(
 }
 
 /**
+ * Find appointment conflicts excluding all appointments in a given series.
+ * Used for scope=future conflict checking where the entire series is being shifted.
+ */
+export function findAppointmentConflictsExcludingSeries(
+  startTimeMs: number,
+  endTimeMs: number,
+  excludeSeriesId: string
+): ConflictResult[] {
+  const db = getDb();
+  return db
+    .prepare(
+      `SELECT id, start_time as startTime, end_time as endTime
+       FROM appointments
+       WHERE status IN ('CONFIRMED', 'REQUESTED')
+       AND start_time < ? AND end_time > ?
+       AND (series_id IS NULL OR series_id != ?)`
+    )
+    .all(endTimeMs, startTimeMs, excludeSeriesId) as ConflictResult[];
+}
+
+/**
  * Check if a time range has any conflicts (appointments or blockers).
  */
 export function hasConflicts(

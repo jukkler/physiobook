@@ -44,6 +44,10 @@ export default function AppointmentForm({
   const [saving, setSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteScope, setDeleteScope] = useState<"single" | "series">("single");
+  const [editScope, setEditScope] = useState<"single" | "future">("single");
+  const [showConflict, setShowConflict] = useState(false);
+  const [conflictMessage, setConflictMessage] = useState("");
+  const [pendingPayload, setPendingPayload] = useState<{ url: string; method: string; body: Record<string, unknown> } | null>(null);
   const [isSeries, setIsSeries] = useState(false);
   const [seriesCount, setSeriesCount] = useState(6);
   const [seriesInterval, setSeriesInterval] = useState(1);
@@ -123,7 +127,8 @@ export default function AppointmentForm({
         payload.series = { dayOfWeek, count, intervalWeeks: seriesInterval };
       }
 
-      const url = isEdit ? `/api/appointments/${appointment.id}` : "/api/appointments";
+      const scopeParam = isEdit && appointment.seriesId && editScope === "future" ? "?scope=future" : "";
+      const url = isEdit ? `/api/appointments/${appointment.id}${scopeParam}` : "/api/appointments";
       const method = isEdit ? "PATCH" : "POST";
 
       const res = await fetch(url, {
@@ -132,17 +137,19 @@ export default function AppointmentForm({
         body: JSON.stringify(payload),
       });
 
+      if (res.status === 409) {
+        // Conflict — ask user whether to force or cancel
+        const data = await res.json();
+        setConflictMessage(data.error || "Dieser Zeitraum ist bereits belegt. Trotzdem speichern?");
+        setPendingPayload({ url, method, body: payload });
+        setShowConflict(true);
+        return;
+      }
+
       if (!res.ok) {
         const data = await res.json();
         setError(data.error || "Fehler beim Speichern");
         return;
-      }
-
-      if (!isEdit && isSeries) {
-        const data = await res.json();
-        if (data.conflicts?.length > 0) {
-          alert(`${data.created.length} von ${seriesCount} Terminen erstellt. ${data.conflicts.length} Konflikte wurden übersprungen.`);
-        }
       }
 
       onSave();
@@ -169,6 +176,31 @@ export default function AppointmentForm({
       setError("Netzwerkfehler");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleForceSubmit() {
+    if (!pendingPayload) return;
+    setSaving(true);
+    setShowConflict(false);
+    setError("");
+    try {
+      const res = await fetch(pendingPayload.url, {
+        method: pendingPayload.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...pendingPayload.body, force: true }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Fehler beim Speichern");
+        return;
+      }
+      onSave();
+    } catch {
+      setError("Netzwerkfehler");
+    } finally {
+      setSaving(false);
+      setPendingPayload(null);
     }
   }
 
@@ -391,8 +423,28 @@ export default function AppointmentForm({
           </div>
 
           {isEdit && appointment.seriesId && (
-            <div className="text-xs text-gray-500 bg-gray-50 rounded p-2">
-              Dieser Termin gehört zu einer Serie.
+            <div className="bg-gray-50 rounded p-3 space-y-2">
+              <p className="text-xs text-gray-500">Dieser Termin gehört zu einer Serie.</p>
+              <div className="space-y-1">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="radio"
+                    name="editScope"
+                    checked={editScope === "single"}
+                    onChange={() => setEditScope("single")}
+                  />
+                  <span className="text-gray-700">Nur diesen Termin ändern</span>
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="radio"
+                    name="editScope"
+                    checked={editScope === "future"}
+                    onChange={() => setEditScope("future")}
+                  />
+                  <span className="text-gray-700">Alle zukünftigen Termine der Serie</span>
+                </label>
+              </div>
             </div>
           )}
 
@@ -471,6 +523,38 @@ export default function AppointmentForm({
           )}
         </form>
       </div>
+
+      {showConflict && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-sm">
+            <div className="p-4 border-b">
+              <h3 className="text-lg font-semibold text-amber-600">Zeitkonflikt</h3>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-sm text-gray-700">
+                {conflictMessage || "Dieser Zeitraum ist bereits belegt."} Trotzdem speichern?
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleForceSubmit}
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-md hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {saving ? "Speichern..." : "Trotzdem speichern"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowConflict(false); setPendingPayload(null); setConflictMessage(""); }}
+                  className="px-4 py-2 border text-sm rounded-md hover:bg-gray-50"
+                >
+                  Abbrechen
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

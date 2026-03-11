@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { formatBerlinTime, getWeekMonday, addDays, berlinDayStartMs, getIsoWeekNumber, todayBerlin } from "@/lib/time";
+import { computeOverlapColumns } from "@/lib/layout";
 import type { Appointment, Blocker, AppSettings as Settings } from "@/lib/db/schema";
 
 interface WeekViewProps {
@@ -300,40 +301,51 @@ export default function WeekView({
                       );
                     })}
 
-                    {/* Appointments */}
-                    {dayAppts.map((a) => {
-                      const apptStartBerlin = new Intl.DateTimeFormat("en-GB", {
-                        timeZone: "Europe/Berlin", hour: "2-digit", minute: "2-digit", hour12: false,
-                      }).format(new Date(a.startTime));
-                      const apptEndBerlin = new Intl.DateTimeFormat("en-GB", {
-                        timeZone: "Europe/Berlin", hour: "2-digit", minute: "2-digit", hour12: false,
-                      }).format(new Date(a.endTime));
-                      const [aH, aM] = apptStartBerlin.split(":").map(Number);
-                      const [eH, eM] = apptEndBerlin.split(":").map(Number);
-                      const apptInLunch = dayIdx < 5 && (aH * 60 + aM) >= lunchStartMin && (eH * 60 + eM) <= lunchEndMin;
-                      const palette = apptInLunch ? LUNCH_STATUS_COLORS : STATUS_COLORS;
+                    {/* Appointments with overlap columns */}
+                    {(() => {
+                      const layout = computeOverlapColumns(dayAppts);
+                      return dayAppts.map((a) => {
+                        const apptStartBerlin = new Intl.DateTimeFormat("en-GB", {
+                          timeZone: "Europe/Berlin", hour: "2-digit", minute: "2-digit", hour12: false,
+                        }).format(new Date(a.startTime));
+                        const apptEndBerlin = new Intl.DateTimeFormat("en-GB", {
+                          timeZone: "Europe/Berlin", hour: "2-digit", minute: "2-digit", hour12: false,
+                        }).format(new Date(a.endTime));
+                        const [aH, aM] = apptStartBerlin.split(":").map(Number);
+                        const [eH, eM] = apptEndBerlin.split(":").map(Number);
+                        const apptInLunch = dayIdx < 5 && (aH * 60 + aM) >= lunchStartMin && (eH * 60 + eM) <= lunchEndMin;
+                        const palette = apptInLunch ? LUNCH_STATUS_COLORS : STATUS_COLORS;
 
-                      return (
-                      <div
-                        key={a.id}
-                        className={`absolute left-0 right-0 border-l-2 rounded-r-sm mx-0.5 px-0.5 overflow-hidden ${
-                          palette[a.status] || palette.CONFIRMED
-                        }`}
-                        style={{
-                          top: `${getSlotPosition(a.startTime)}%`,
-                          height: `${getSlotHeight(a.startTime, a.endTime)}%`,
-                          minHeight: "0.75rem",
-                        }}
-                      >
-                        <span className="text-xs font-medium truncate block">
-                          {a.patientName}
-                        </span>
-                        <span className="text-[11px] opacity-70 truncate block">
-                          {formatBerlinTime(a.startTime)}
-                        </span>
-                      </div>
-                      );
-                    })}
+                        const col = layout.get(a.id);
+                        const colIdx = col?.column ?? 0;
+                        const totalCols = col?.totalColumns ?? 1;
+                        const widthPct = 100 / totalCols;
+                        const leftPct = colIdx * widthPct;
+
+                        return (
+                        <div
+                          key={a.id}
+                          className={`absolute border-l-2 rounded-r-sm px-0.5 overflow-hidden ${
+                            palette[a.status] || palette.CONFIRMED
+                          }`}
+                          style={{
+                            top: `${getSlotPosition(a.startTime)}%`,
+                            height: `${getSlotHeight(a.startTime, a.endTime)}%`,
+                            minHeight: "0.75rem",
+                            left: `${leftPct}%`,
+                            width: `${widthPct}%`,
+                          }}
+                        >
+                          <span className="text-xs font-medium truncate block">
+                            {a.patientName}
+                          </span>
+                          <span className="text-[11px] opacity-70 truncate block">
+                            {formatBerlinTime(a.startTime)}
+                          </span>
+                        </div>
+                        );
+                      });
+                    })()}
                   </div>
                 </div>
               );

@@ -4,6 +4,7 @@ import { getDb, getOrmDb } from "@/lib/db";
 import { blockers } from "@/lib/db/schema";
 import { withApiAuth } from "@/lib/auth";
 import { checkCsrf } from "@/lib/csrf";
+import { findAppointmentConflicts, hasOverlap } from "@/lib/overlap";
 
 // GET /api/blockers?from=<epochMs>&to=<epochMs>
 export const GET = withApiAuth(async (req) => {
@@ -37,6 +38,7 @@ export const POST = withApiAuth(async (req) => {
     startTime?: number;
     endTime?: number;
     series?: { count: number; intervalDays: number };
+    force?: boolean;
   };
 
   try {
@@ -70,8 +72,36 @@ export const POST = withApiAuth(async (req) => {
       return Response.json({ error: "Anzahl muss zwischen 1 und 365 liegen" }, { status: 400 });
     }
 
-    const groupId = uuidv4();
     const duration = endTime - startTime;
+
+    // Pre-compute all slots and check for conflicts
+    if (!body.force) {
+      const slots = Array.from({ length: count }, (_, i) => {
+        const offset = i * intervalDays * 24 * 60 * 60 * 1000;
+        return { start: startTime + offset, end: startTime + offset + duration };
+      });
+      const rangeStart = slots[0].start;
+      const rangeEnd = slots[slots.length - 1].end;
+      const existingAppts = findAppointmentConflicts(rangeStart, rangeEnd);
+
+      let conflictCount = 0;
+      for (const slot of slots) {
+        for (const a of existingAppts) {
+          if (hasOverlap(slot.start, slot.end, a.startTime, a.endTime)) {
+            conflictCount++;
+            break;
+          }
+        }
+      }
+      if (conflictCount > 0) {
+        return Response.json(
+          { error: `Zeitkonflikt: ${conflictCount} von ${count} Blockern überlappen mit bestehenden Terminen` },
+          { status: 409 }
+        );
+      }
+    }
+
+    const groupId = uuidv4();
     const created: string[] = [];
 
     const insertAll = getDb().transaction(() => {
@@ -94,7 +124,17 @@ export const POST = withApiAuth(async (req) => {
     return Response.json({ blockerGroupId: groupId, created }, { status: 201 });
   }
 
-  // Single blocker
+  // Single blocker — conflict check
+  if (!body.force) {
+    const conflicts = findAppointmentConflicts(startTime, endTime);
+    if (conflicts.length > 0) {
+      return Response.json(
+        { error: `Zeitkonflikt: ${conflicts.length} bestehende(r) Termin(e) in diesem Zeitraum` },
+        { status: 409 }
+      );
+    }
+  }
+
   const id = uuidv4();
   getDb()
     .prepare(

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { formatBerlinDate, berlinDayStartMs, dateTimeToEpoch } from "@/lib/time";
+import { computeOverlapColumns } from "@/lib/layout";
 import type { Appointment, Blocker, AppSettings as Settings } from "@/lib/db/schema";
 import AppointmentCard from "./AppointmentCard";
 
@@ -247,49 +248,56 @@ export default function DayView({
             );
           })}
 
-          {/* Appointments overlaid as absolute blocks */}
-          {columnAppts.map((a) => {
-            const startMin = Math.max(msToMinutes(a.startTime), columnStartMin);
-            const endMin = Math.min(msToMinutes(a.endTime), columnEndMin);
-            // Scale percentages: slots only occupy (slots.length / maxSlotCount) of container
-            const scale = slots.length / maxSlotCount;
-            const topPct = ((startMin - columnStartMin) / totalMinutes) * scale * 100;
-            const heightPct = ((endMin - startMin) / totalMinutes) * scale * 100;
+          {/* Appointments overlaid as absolute blocks with overlap columns */}
+          {(() => {
+            const layout = computeOverlapColumns(columnAppts);
+            return columnAppts.map((a) => {
+              const startMin = Math.max(msToMinutes(a.startTime), columnStartMin);
+              const endMin = Math.min(msToMinutes(a.endTime), columnEndMin);
+              const scale = slots.length / maxSlotCount;
+              const topPct = ((startMin - columnStartMin) / totalMinutes) * scale * 100;
+              const heightPct = ((endMin - startMin) / totalMinutes) * scale * 100;
 
-            // Check if appointment overlaps lunch break (Mo-Fr 13-15)
-            const apptStartMin = msToMinutes(a.startTime);
-            const apptEndMin = msToMinutes(a.endTime);
-            const apptInLunch = isWeekday && apptStartMin >= lunchStartMin && apptEndMin <= lunchEndMin;
+              const apptStartMin = msToMinutes(a.startTime);
+              const apptEndMin = msToMinutes(a.endTime);
+              const apptInLunch = isWeekday && apptStartMin >= lunchStartMin && apptEndMin <= lunchEndMin;
 
-            return (
-              <div
-                key={a.id}
-                className="absolute z-10 pointer-events-none"
-                style={{
-                  top: `${topPct}%`,
-                  height: `${heightPct}%`,
-                  left: "3.5rem",
-                  right: 0,
-                }}
-              >
-                <div className="h-full px-1 py-0.5 pointer-events-auto">
-                  <AppointmentCard
-                    id={a.id}
-                    patientName={a.patientName}
-                    startTime={a.startTime}
-                    endTime={a.endTime}
-                    durationMinutes={a.durationMinutes}
-                    status={a.status}
-                    isLunchTime={apptInLunch}
-                    notes={a.notes}
-                    onConfirm={handleConfirm}
-                    onReject={handleReject}
-                    onClick={() => onEditAppointment(a)}
-                  />
+              const col = layout.get(a.id);
+              const colIdx = col?.column ?? 0;
+              const totalCols = col?.totalColumns ?? 1;
+              const widthPct = 100 / totalCols;
+              const leftPct = colIdx * widthPct;
+
+              return (
+                <div
+                  key={a.id}
+                  className="absolute z-10 pointer-events-none"
+                  style={{
+                    top: `${topPct}%`,
+                    height: `${heightPct}%`,
+                    left: `calc(3.5rem + (100% - 3.5rem) * ${leftPct / 100})`,
+                    width: `calc((100% - 3.5rem) * ${widthPct / 100})`,
+                  }}
+                >
+                  <div className="h-full px-0.5 py-0.5 pointer-events-auto">
+                    <AppointmentCard
+                      id={a.id}
+                      patientName={a.patientName}
+                      startTime={a.startTime}
+                      endTime={a.endTime}
+                      durationMinutes={a.durationMinutes}
+                      status={a.status}
+                      isLunchTime={apptInLunch}
+                      notes={a.notes}
+                      onConfirm={handleConfirm}
+                      onReject={handleReject}
+                      onClick={() => onEditAppointment(a)}
+                    />
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            });
+          })()}
         </div>
       </div>
     );

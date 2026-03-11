@@ -45,6 +45,7 @@ export const POST = withApiAuth(async (req) => {
     notes?: string;
     status?: string;
     series?: { dayOfWeek: number; count: number; intervalWeeks?: number };
+    force?: boolean;
   };
 
   try {
@@ -116,17 +117,27 @@ export const POST = withApiAuth(async (req) => {
     const rangeEnd = slots[slots.length - 1].end;
     const checkConflict = createBatchConflictChecker(rangeStart, rangeEnd);
 
+    // Check for any conflicts first
+    const conflictSlots: number[] = [];
+    for (const slot of slots) {
+      if (checkConflict(slot.start, slot.end)) {
+        conflictSlots.push(slot.start);
+      }
+    }
+
+    // If conflicts found and not force, return 409
+    if (!body.force && conflictSlots.length > 0) {
+      return Response.json(
+        { error: `Zeitkonflikt: ${conflictSlots.length} von ${slots.length} Terminen haben Konflikte`, conflicts: conflictSlots },
+        { status: 409 }
+      );
+    }
+
     const created: string[] = [];
-    const conflicts: number[] = [];
 
     // All inserts in a single transaction
     const insertSeries = getDb().transaction(() => {
       for (const slot of slots) {
-        if (checkConflict(slot.start, slot.end)) {
-          conflicts.push(slot.start);
-          continue;
-        }
-
         const id = uuidv4();
         getDb()
           .prepare(
@@ -146,11 +157,11 @@ export const POST = withApiAuth(async (req) => {
     insertSeries();
 
     syncPatient(patientName, contactEmail, contactPhone, now);
-    return Response.json({ seriesId, created, conflicts }, { status: 201 });
+    return Response.json({ seriesId, created }, { status: 201 });
   }
 
   // Single appointment
-  if (hasConflicts(startTime, endTime)) {
+  if (!body.force && hasConflicts(startTime, endTime)) {
     return Response.json(
       { error: "Zeitkonflikt: Dieser Zeitraum ist bereits belegt" },
       { status: 409 }
