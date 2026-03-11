@@ -18,6 +18,14 @@ export interface ConflictResult {
   id: string;
   startTime: number;
   endTime: number;
+  name?: string;
+}
+
+export interface ConflictDetail {
+  name: string;
+  startTime: number;
+  endTime: number;
+  type: "appointment" | "blocker";
 }
 
 /**
@@ -34,7 +42,7 @@ export function findAppointmentConflicts(
   if (excludeId) {
     return db
       .prepare(
-        `SELECT id, start_time as startTime, end_time as endTime
+        `SELECT id, start_time as startTime, end_time as endTime, patient_name as name
          FROM appointments
          WHERE status IN ('CONFIRMED', 'REQUESTED')
          AND start_time < ? AND end_time > ?
@@ -45,7 +53,7 @@ export function findAppointmentConflicts(
 
   return db
     .prepare(
-      `SELECT id, start_time as startTime, end_time as endTime
+      `SELECT id, start_time as startTime, end_time as endTime, patient_name as name
        FROM appointments
        WHERE status IN ('CONFIRMED', 'REQUESTED')
        AND start_time < ? AND end_time > ?`
@@ -64,7 +72,7 @@ export function findBlockerConflicts(
 
   return db
     .prepare(
-      `SELECT id, start_time as startTime, end_time as endTime
+      `SELECT id, start_time as startTime, end_time as endTime, title as name
        FROM blockers
        WHERE start_time < ? AND end_time > ?`
     )
@@ -83,7 +91,7 @@ export function findAppointmentConflictsExcludingSeries(
   const db = getDb();
   return db
     .prepare(
-      `SELECT id, start_time as startTime, end_time as endTime
+      `SELECT id, start_time as startTime, end_time as endTime, patient_name as name
        FROM appointments
        WHERE status IN ('CONFIRMED', 'REQUESTED')
        AND start_time < ? AND end_time > ?
@@ -109,6 +117,29 @@ export function hasConflicts(
 
   const blockerConflicts = findBlockerConflicts(startTimeMs, endTimeMs);
   return blockerConflicts.length > 0;
+}
+
+/**
+ * Get detailed conflict information for a time range.
+ */
+export function getConflictDetails(
+  startTimeMs: number,
+  endTimeMs: number,
+  excludeAppointmentId?: string
+): ConflictDetail[] {
+  const details: ConflictDetail[] = [];
+
+  const appts = findAppointmentConflicts(startTimeMs, endTimeMs, excludeAppointmentId);
+  for (const a of appts) {
+    details.push({ name: a.name || "Unbekannt", startTime: a.startTime, endTime: a.endTime, type: "appointment" });
+  }
+
+  const blockers = findBlockerConflicts(startTimeMs, endTimeMs);
+  for (const b of blockers) {
+    details.push({ name: b.name || "Blocker", startTime: b.startTime, endTime: b.endTime, type: "blocker" });
+  }
+
+  return details;
 }
 
 /**

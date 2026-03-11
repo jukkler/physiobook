@@ -30,6 +30,7 @@ export const appointments = sqliteTable(
       table.status
     ),
     index("idx_appointments_series").on(table.seriesId),
+    index("idx_appointments_patient_series").on(table.patientName, table.seriesId),
     index("idx_appointments_created_status").on(
       table.createdAt,
       table.status

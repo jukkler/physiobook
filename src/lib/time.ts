@@ -192,3 +192,27 @@ export function getIsoWeekNumber(dateStr: string): number {
   const yearStart = new Date(Date.UTC(temp.getUTCFullYear(), 0, 1));
   return Math.ceil(((temp.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 }
+
+const WEEKDAY_MAP: Record<string, number> = {
+  Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+};
+
+/**
+ * Extract Berlin-timezone weekday (0=Sun..6=Sat) and minute-of-day (0-1439) from epoch ms.
+ * DST-safe: always returns the local Berlin time.
+ */
+export function getBerlinWeekdayAndMinute(epochMs: number): { weekday: number; minute: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: BERLIN_TZ,
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(epochMs));
+
+  const weekdayStr = parts.find((p) => p.type === "weekday")?.value || "Mon";
+  const hour = parseInt(parts.find((p) => p.type === "hour")?.value || "0", 10);
+  const min = parseInt(parts.find((p) => p.type === "minute")?.value || "0", 10);
+
+  return { weekday: WEEKDAY_MAP[weekdayStr] ?? 1, minute: hour * 60 + min };
+}

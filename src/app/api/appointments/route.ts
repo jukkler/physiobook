@@ -6,8 +6,9 @@ import { isValidDuration } from "@/lib/validation";
 import { syncPatient } from "@/lib/patients";
 import { withApiAuth } from "@/lib/auth";
 import { checkCsrf } from "@/lib/csrf";
-import { hasConflicts, createBatchConflictChecker } from "@/lib/overlap";
+import { getConflictDetails, createBatchConflictChecker, findAppointmentConflicts, findBlockerConflicts, hasOverlap } from "@/lib/overlap";
 import { filterNotes } from "@/lib/notes-filter";
+import { detectAndGroupSeries } from "@/lib/series-detect";
 
 // GET /api/appointments?from=<epochMs>&to=<epochMs>
 export const GET = withApiAuth(async (req) => {
@@ -112,25 +113,37 @@ export const POST = withApiAuth(async (req) => {
       slots.push({ start: slotStart, end: slotStart + durationMinutes * 60_000 });
     }
 
-    // Batch conflict check: 2 queries total instead of 2 per slot
-    const rangeStart = slots[0].start;
-    const rangeEnd = slots[slots.length - 1].end;
-    const checkConflict = createBatchConflictChecker(rangeStart, rangeEnd);
+    // Batch conflict check
+    if (!body.force) {
+      const rangeStart = slots[0].start;
+      const rangeEnd = slots[slots.length - 1].end;
+      const existingAppts = findAppointmentConflicts(rangeStart, rangeEnd);
+      const existingBlockers = findBlockerConflicts(rangeStart, rangeEnd);
 
-    // Check for any conflicts first
-    const conflictSlots: number[] = [];
-    for (const slot of slots) {
-      if (checkConflict(slot.start, slot.end)) {
-        conflictSlots.push(slot.start);
+      const conflictDetails: { name: string; startTime: number; endTime: number; type: "appointment" | "blocker" }[] = [];
+      const seen = new Set<string>();
+
+      for (const slot of slots) {
+        for (const a of existingAppts) {
+          if (hasOverlap(slot.start, slot.end, a.startTime, a.endTime) && !seen.has(a.id)) {
+            seen.add(a.id);
+            conflictDetails.push({ name: a.name || "Unbekannt", startTime: a.startTime, endTime: a.endTime, type: "appointment" });
+          }
+        }
+        for (const b of existingBlockers) {
+          if (hasOverlap(slot.start, slot.end, b.startTime, b.endTime) && !seen.has(b.id)) {
+            seen.add(b.id);
+            conflictDetails.push({ name: b.name || "Blocker", startTime: b.startTime, endTime: b.endTime, type: "blocker" });
+          }
+        }
       }
-    }
 
-    // If conflicts found and not force, return 409
-    if (!body.force && conflictSlots.length > 0) {
-      return Response.json(
-        { error: `Zeitkonflikt: ${conflictSlots.length} von ${slots.length} Terminen haben Konflikte`, conflicts: conflictSlots },
-        { status: 409 }
-      );
+      if (conflictDetails.length > 0) {
+        return Response.json(
+          { error: `Zeitkonflikt: ${conflictDetails.length} Konflikte gefunden`, conflictDetails },
+          { status: 409 }
+        );
+      }
     }
 
     const created: string[] = [];
@@ -161,11 +174,14 @@ export const POST = withApiAuth(async (req) => {
   }
 
   // Single appointment
-  if (!body.force && hasConflicts(startTime, endTime)) {
-    return Response.json(
-      { error: "Zeitkonflikt: Dieser Zeitraum ist bereits belegt" },
-      { status: 409 }
-    );
+  if (!body.force) {
+    const conflictDetails = getConflictDetails(startTime, endTime);
+    if (conflictDetails.length > 0) {
+      return Response.json(
+        { error: "Zeitkonflikt: Dieser Zeitraum ist bereits belegt", conflictDetails },
+        { status: 409 }
+      );
+    }
   }
 
   const id = uuidv4();
@@ -183,5 +199,6 @@ export const POST = withApiAuth(async (req) => {
     );
 
   syncPatient(patientName, contactEmail, contactPhone, now);
+  detectAndGroupSeries(patientName);
   return Response.json({ id }, { status: 201 });
 });

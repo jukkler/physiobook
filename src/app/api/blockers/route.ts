@@ -84,18 +84,19 @@ export const POST = withApiAuth(async (req) => {
       const rangeEnd = slots[slots.length - 1].end;
       const existingAppts = findAppointmentConflicts(rangeStart, rangeEnd);
 
-      let conflictCount = 0;
+      const conflictDetails: { name: string; startTime: number; endTime: number; type: "appointment" | "blocker" }[] = [];
+      const seen = new Set<string>();
       for (const slot of slots) {
         for (const a of existingAppts) {
-          if (hasOverlap(slot.start, slot.end, a.startTime, a.endTime)) {
-            conflictCount++;
-            break;
+          if (hasOverlap(slot.start, slot.end, a.startTime, a.endTime) && !seen.has(a.id)) {
+            seen.add(a.id);
+            conflictDetails.push({ name: a.name || "Unbekannt", startTime: a.startTime, endTime: a.endTime, type: "appointment" });
           }
         }
       }
-      if (conflictCount > 0) {
+      if (conflictDetails.length > 0) {
         return Response.json(
-          { error: `Zeitkonflikt: ${conflictCount} von ${count} Blockern überlappen mit bestehenden Terminen` },
+          { error: `Zeitkonflikt: ${conflictDetails.length} Konflikte mit bestehenden Terminen`, conflictDetails },
           { status: 409 }
         );
       }
@@ -128,8 +129,11 @@ export const POST = withApiAuth(async (req) => {
   if (!body.force) {
     const conflicts = findAppointmentConflicts(startTime, endTime);
     if (conflicts.length > 0) {
+      const conflictDetails = conflicts.map((a) => ({
+        name: a.name || "Unbekannt", startTime: a.startTime, endTime: a.endTime, type: "appointment" as const,
+      }));
       return Response.json(
-        { error: `Zeitkonflikt: ${conflicts.length} bestehende(r) Termin(e) in diesem Zeitraum` },
+        { error: `Zeitkonflikt: ${conflicts.length} bestehende(r) Termin(e) in diesem Zeitraum`, conflictDetails },
         { status: 409 }
       );
     }

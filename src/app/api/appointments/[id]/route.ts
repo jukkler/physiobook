@@ -1,9 +1,11 @@
 import { getDb } from "@/lib/db";
 import { withApiAuth } from "@/lib/auth";
 import { checkCsrf } from "@/lib/csrf";
-import { hasConflicts, findAppointmentConflictsExcludingSeries, findBlockerConflicts, hasOverlap } from "@/lib/overlap";
+import { getConflictDetails, findAppointmentConflictsExcludingSeries, findBlockerConflicts, hasOverlap } from "@/lib/overlap";
+import type { ConflictDetail } from "@/lib/overlap";
 import { filterNotes } from "@/lib/notes-filter";
 import { isValidDuration } from "@/lib/validation";
+import { detectAndGroupSeries } from "@/lib/series-detect";
 
 // GET /api/appointments/[id]
 export const GET = withApiAuth(async (_req, ctx) => {
@@ -84,9 +86,10 @@ export const PATCH = withApiAuth(async (req, ctx) => {
 
     // Overlap check if time changed
     if (!body.force && (body.startTime || body.durationMinutes)) {
-      if (hasConflicts(newStart, newEnd, id)) {
+      const conflictDetails = getConflictDetails(newStart, newEnd, id);
+      if (conflictDetails.length > 0) {
         return Response.json(
-          { error: "Zeitkonflikt: Dieser Zeitraum ist bereits belegt" },
+          { error: "Zeitkonflikt: Dieser Zeitraum ist bereits belegt", conflictDetails },
           { status: 409 }
         );
       }
@@ -119,6 +122,13 @@ export const PATCH = withApiAuth(async (req, ctx) => {
       (body.startTime || body.durationMinutes) ? 1 : 0,
       now, id
     );
+
+    // Auto-detect series after time/patient changes
+    const pName = body.patientName || (existing.patient_name as string);
+    detectAndGroupSeries(pName);
+    if (body.patientName && body.patientName !== existing.patient_name) {
+      detectAndGroupSeries(existing.patient_name as string);
+    }
 
     return Response.json({ ok: true });
   }
@@ -159,23 +169,27 @@ export const PATCH = withApiAuth(async (req, ctx) => {
       const blockers = findBlockerConflicts(rangeStart, rangeEnd);
 
       // Check each shifted appointment against loaded data
+      const conflictDetails: ConflictDetail[] = [];
+      const seen = new Set<string>();
       for (const s of shifted) {
         for (const other of otherAppts) {
-          if (hasOverlap(s.newStart, s.newEnd, other.startTime, other.endTime)) {
-            return Response.json(
-              { error: "Zeitkonflikt: Dieser Zeitraum ist bereits belegt" },
-              { status: 409 }
-            );
+          if (hasOverlap(s.newStart, s.newEnd, other.startTime, other.endTime) && !seen.has(other.id)) {
+            seen.add(other.id);
+            conflictDetails.push({ name: other.name || "Unbekannt", startTime: other.startTime, endTime: other.endTime, type: "appointment" });
           }
         }
         for (const b of blockers) {
-          if (hasOverlap(s.newStart, s.newEnd, b.startTime, b.endTime)) {
-            return Response.json(
-              { error: "Zeitkonflikt: Dieser Zeitraum ist bereits belegt" },
-              { status: 409 }
-            );
+          if (hasOverlap(s.newStart, s.newEnd, b.startTime, b.endTime) && !seen.has(b.id)) {
+            seen.add(b.id);
+            conflictDetails.push({ name: b.name || "Blocker", startTime: b.startTime, endTime: b.endTime, type: "blocker" });
           }
         }
+      }
+      if (conflictDetails.length > 0) {
+        return Response.json(
+          { error: "Zeitkonflikt: Dieser Zeitraum ist bereits belegt", conflictDetails },
+          { status: 409 }
+        );
       }
     }
 

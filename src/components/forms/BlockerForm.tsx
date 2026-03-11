@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { epochToDateInput, epochToTimeInput, dateTimeToEpoch } from "@/lib/time";
+import { epochToDateInput, epochToTimeInput, dateTimeToEpoch, formatBerlinDate, formatBerlinTime } from "@/lib/time";
 
 interface BlockerFormProps {
   defaultStartTime?: number;
@@ -32,6 +32,7 @@ export default function BlockerForm({
   const [showConflict, setShowConflict] = useState(false);
   const [conflictMessage, setConflictMessage] = useState("");
   const [pendingPayload, setPendingPayload] = useState<Record<string, unknown> | null>(null);
+  const [conflictDetails, setConflictDetails] = useState<{ name: string; startTime: number; endTime: number; type: string }[]>([]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -70,6 +71,7 @@ export default function BlockerForm({
       if (res.status === 409) {
         const data = await res.json();
         setConflictMessage(data.error || "Zeitkonflikt mit bestehenden Terminen.");
+        setConflictDetails(data.conflictDetails || []);
         setPendingPayload(payload);
         setShowConflict(true);
         return;
@@ -288,6 +290,21 @@ export default function BlockerForm({
               <p className="text-sm text-gray-700">
                 {conflictMessage} Trotzdem erstellen?
               </p>
+              {conflictDetails.length > 0 && (
+                <div className="max-h-40 overflow-y-auto space-y-1">
+                  {conflictDetails.slice(0, 10).map((c, i) => (
+                    <div key={i} className={`text-xs px-2 py-1.5 rounded ${c.type === "blocker" ? "bg-gray-100 text-gray-700" : "bg-amber-50 text-amber-800"}`}>
+                      <span className="font-medium">{c.name}</span>
+                      <span className="ml-1 opacity-70">
+                        {formatBerlinDate(c.startTime).split(",")[0]} {formatBerlinTime(c.startTime)}–{formatBerlinTime(c.endTime)}
+                      </span>
+                    </div>
+                  ))}
+                  {conflictDetails.length > 10 && (
+                    <p className="text-xs text-gray-500">+ {conflictDetails.length - 10} weitere Konflikte</p>
+                  )}
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -299,7 +316,7 @@ export default function BlockerForm({
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setShowConflict(false); setPendingPayload(null); setConflictMessage(""); }}
+                  onClick={() => { setShowConflict(false); setPendingPayload(null); setConflictMessage(""); setConflictDetails([]); }}
                   className="px-4 py-2 border text-sm rounded-md hover:bg-gray-50"
                 >
                   Abbrechen
