@@ -36,7 +36,8 @@ export function detectAndGroupSeries(patientName: string): void {
   const buckets = new Map<string, Candidate[]>();
   for (const c of candidates) {
     const { weekday, minute } = getBerlinWeekdayAndMinute(c.startTime);
-    const key = `${weekday}-${minute}`;
+    const roundedMinute = Math.round(minute / 5) * 5;
+    const key = `${weekday}-${roundedMinute}`;
     let bucket = buckets.get(key);
     if (!bucket) {
       bucket = [];

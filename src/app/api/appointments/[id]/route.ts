@@ -32,8 +32,8 @@ export const PATCH = withApiAuth(async (req, ctx) => {
   const url = new URL(req.url);
   const scope = url.searchParams.get("scope") || "single";
 
-  if (scope !== "single" && scope !== "future") {
-    return Response.json({ error: "scope muss 'single' oder 'future' sein" }, { status: 400 });
+  if (scope !== "single" && scope !== "series") {
+    return Response.json({ error: "scope muss 'single' oder 'series' sein" }, { status: 400 });
   }
 
   const db = getDb();
@@ -133,27 +133,27 @@ export const PATCH = withApiAuth(async (req, ctx) => {
     return Response.json({ ok: true });
   }
 
-  if (scope === "future" && existing.series_id) {
-    // Update all future appointments in the series (single transaction)
+  if (scope === "series" && existing.series_id) {
+    // Update all appointments in the series (single transaction)
     const seriesId = existing.series_id as string;
     const currentStart = existing.start_time as number;
 
     // Calculate time-of-day shift if startTime changed
     const timeDelta = body.startTime ? body.startTime - currentStart : 0;
 
-    // Conflict check for scope=future (unless force)
+    // Conflict check for scope=series (unless force)
     if (!body.force && (timeDelta !== 0 || body.durationMinutes)) {
-      // Load all future appointments in this series
-      const futureAppts = db
+      // Load all appointments in this series
+      const seriesAppts = db
         .prepare(
           `SELECT id, start_time as startTime, end_time as endTime, duration_minutes as durationMinutes
            FROM appointments
-           WHERE series_id = ? AND start_time >= ?`
+           WHERE series_id = ?`
         )
-        .all(seriesId, currentStart) as { id: string; startTime: number; endTime: number; durationMinutes: number }[];
+        .all(seriesId) as { id: string; startTime: number; endTime: number; durationMinutes: number }[];
 
       // Calculate new times for each appointment
-      const shifted = futureAppts.map((a) => {
+      const shifted = seriesAppts.map((a) => {
         const newStart = a.startTime + timeDelta;
         const newDuration = body.durationMinutes || a.durationMinutes;
         const newEnd = newStart + newDuration * 60_000;
@@ -193,7 +193,7 @@ export const PATCH = withApiAuth(async (req, ctx) => {
       }
     }
 
-    const updateFuture = db.transaction(() => {
+    const updateSeries = db.transaction(() => {
       // Update name, duration, contact fields
       db.prepare(
         `UPDATE appointments SET
@@ -202,16 +202,16 @@ export const PATCH = withApiAuth(async (req, ctx) => {
           contact_email = COALESCE(?, contact_email),
           contact_phone = COALESCE(?, contact_phone),
           updated_at = ?
-        WHERE series_id = ? AND start_time >= ?`
+        WHERE series_id = ?`
       ).run(
         body.patientName || null,
         body.durationMinutes || null,
         body.contactEmail ?? null,
         body.contactPhone ?? null,
-        now, seriesId, currentStart
+        now, seriesId
       );
 
-      // If time changed, shift all future appointments by the same delta
+      // If time changed, shift all appointments by the same delta
       if (timeDelta !== 0) {
         db.prepare(
           `UPDATE appointments SET
@@ -219,21 +219,21 @@ export const PATCH = withApiAuth(async (req, ctx) => {
             end_time = end_time + ?,
             reminder_sent = 0,
             updated_at = ?
-          WHERE series_id = ? AND start_time >= ?`
-        ).run(timeDelta, timeDelta, now, seriesId, currentStart);
+          WHERE series_id = ?`
+        ).run(timeDelta, timeDelta, now, seriesId);
       }
 
-      // If duration changed, recalculate endTime for all affected
+      // If duration changed, recalculate endTime for all
       if (body.durationMinutes) {
         db.prepare(
           `UPDATE appointments SET
             end_time = start_time + ? * 60000,
             updated_at = ?
-          WHERE series_id = ? AND start_time >= ?`
-        ).run(body.durationMinutes, now, seriesId, currentStart + timeDelta);
+          WHERE series_id = ?`
+        ).run(body.durationMinutes, now, seriesId);
       }
     });
-    updateFuture();
+    updateSeries();
 
     return Response.json({ ok: true });
   }

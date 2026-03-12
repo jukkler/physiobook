@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { epochToDateInput, epochToTimeInput, dateTimeToEpoch, formatBerlinDate, formatBerlinTime } from "@/lib/time";
+import { PRAXIS } from "@/lib/constants";
 import type { Appointment } from "@/lib/db/schema";
 
 interface PatientSuggestion {
@@ -43,8 +44,7 @@ export default function AppointmentForm({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteScope, setDeleteScope] = useState<"single" | "series">("single");
-  const [editScope, setEditScope] = useState<"single" | "future">("single");
+  const [editScope, setEditScope] = useState<"single" | "series">("single");
   const [showConflict, setShowConflict] = useState(false);
   const [conflictMessage, setConflictMessage] = useState("");
   const [conflictDetails, setConflictDetails] = useState<{ name: string; startTime: number; endTime: number; type: string }[]>([]);
@@ -128,7 +128,7 @@ export default function AppointmentForm({
         payload.series = { dayOfWeek, count, intervalWeeks: seriesInterval };
       }
 
-      const scopeParam = isEdit && appointment.seriesId && editScope === "future" ? "?scope=future" : "";
+      const scopeParam = isEdit && appointment.seriesId && editScope === "series" ? "?scope=series" : "";
       const url = isEdit ? `/api/appointments/${appointment.id}${scopeParam}` : "/api/appointments";
       const method = isEdit ? "PATCH" : "POST";
 
@@ -203,6 +203,68 @@ export default function AppointmentForm({
     } finally {
       setSaving(false);
       setPendingPayload(null);
+    }
+  }
+
+  async function handlePrint() {
+    const name = isEdit ? appointment!.patientName : patientName;
+    if (!name) return;
+
+    try {
+      const res = await fetch(`/api/appointments/patient?name=${encodeURIComponent(name)}`);
+      if (!res.ok) return;
+      const appts: { startTime: number; endTime: number; durationMinutes: number }[] = await res.json();
+
+      if (appts.length === 0) {
+        setError("Keine zukünftigen Termine gefunden.");
+        return;
+      }
+
+      const rows = appts.map((a) =>
+        `<tr>
+          <td style="padding:4px 12px 4px 0">${formatBerlinDate(a.startTime)}</td>
+          <td style="padding:4px 12px 4px 0">${formatBerlinTime(a.startTime)} – ${formatBerlinTime(a.endTime)}</td>
+          <td style="padding:4px 0">${a.durationMinutes} min</td>
+        </tr>`
+      ).join("");
+
+      const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Termine ${name}</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 40px; color: #111; }
+  .header { border-bottom: 2px solid #111; padding-bottom: 12px; margin-bottom: 24px; display: flex; align-items: center; gap: 12px; }
+  .header img { height: 48px; width: auto; }
+  .header-text h1 { margin: 0; font-size: 18px; }
+  .header-text p { margin: 4px 0 0; font-size: 13px; color: #555; }
+  h2 { font-size: 15px; margin: 0 0 16px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  tr:nth-child(even) { background: #f9f9f9; }
+  th { text-align: left; padding: 4px 12px 4px 0; border-bottom: 1px solid #ccc; font-size: 12px; color: #555; }
+  .footer { margin-top: 32px; font-size: 11px; color: #999; }
+</style></head><body>
+<div class="header">
+  <img src="/logo.svg" alt="Logo" />
+  <div class="header-text">
+    <h1>${PRAXIS.name}</h1>
+    <p>${PRAXIS.address} &middot; ${PRAXIS.phone}</p>
+  </div>
+</div>
+<h2>Terminübersicht für ${name}</h2>
+<table>
+  <thead><tr><th>Datum</th><th>Uhrzeit</th><th>Dauer</th></tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<div class="footer">Gedruckt am ${formatBerlinDate(Date.now())}</div>
+<script>window.onload=()=>{window.print();window.onafterprint=()=>window.close();}</script>
+</body></html>`;
+
+      const win = window.open("", "_blank");
+      if (win) {
+        win.document.write(html);
+        win.document.close();
+      }
+    } catch {
+      setError("Fehler beim Laden der Termine");
     }
   }
 
@@ -441,10 +503,10 @@ export default function AppointmentForm({
                   <input
                     type="radio"
                     name="editScope"
-                    checked={editScope === "future"}
-                    onChange={() => setEditScope("future")}
+                    checked={editScope === "series"}
+                    onChange={() => setEditScope("series")}
                   />
-                  <span className="text-gray-700">Alle zukünftigen Termine der Serie</span>
+                  <span className="text-gray-700">Alle Termine der Serie ändern</span>
                 </label>
               </div>
             </div>
@@ -458,9 +520,33 @@ export default function AppointmentForm({
             >
               {saving ? "Speichern..." : isEdit ? "Speichern" : "Erstellen"}
             </button>
+            {isEdit && (
+              !showDeleteConfirm ? (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  disabled={saving}
+                  className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 disabled:opacity-50"
+                >
+                  Löschen
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const scope = appointment?.seriesId ? editScope : "single";
+                    handleDelete(scope);
+                  }}
+                  disabled={saving}
+                  className="px-4 py-2 bg-red-800 text-white text-sm font-medium rounded-md hover:bg-red-900 disabled:opacity-50"
+                >
+                  {saving ? "Löschen..." : "Wirklich löschen?"}
+                </button>
+              )
+            )}
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => { onClose(); setShowDeleteConfirm(false); }}
               className="px-4 py-2 border text-sm rounded-md hover:bg-gray-50"
             >
               Abbrechen
@@ -468,59 +554,14 @@ export default function AppointmentForm({
           </div>
 
           {isEdit && (
-            <div className="border-t pt-3 mt-3">
-              {!showDeleteConfirm ? (
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="text-sm text-red-600 hover:text-red-800"
-                >
-                  Termin löschen
-                </button>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-sm text-gray-600">Wirklich löschen?</p>
-                  {appointment.seriesId && (
-                    <div className="flex gap-2">
-                      <label className="flex items-center gap-1 text-sm">
-                        <input
-                          type="radio"
-                          name="deleteScope"
-                          checked={deleteScope === "single"}
-                          onChange={() => setDeleteScope("single")}
-                        />
-                        Nur diesen
-                      </label>
-                      <label className="flex items-center gap-1 text-sm">
-                        <input
-                          type="radio"
-                          name="deleteScope"
-                          checked={deleteScope === "series"}
-                          onChange={() => setDeleteScope("series")}
-                        />
-                        Ganze Serie
-                      </label>
-                    </div>
-                  )}
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(appointment.seriesId ? deleteScope : "single")}
-                      disabled={saving}
-                      className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
-                    >
-                      Löschen
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowDeleteConfirm(false)}
-                      className="px-3 py-1 text-sm border rounded hover:bg-gray-50"
-                    >
-                      Abbrechen
-                    </button>
-                  </div>
-                </div>
-              )}
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={handlePrint}
+                className="w-full px-4 py-2 text-sm text-gray-600 border border-dashed rounded-md hover:bg-gray-50 hover:text-gray-900"
+              >
+                Termine drucken
+              </button>
             </div>
           )}
         </form>
