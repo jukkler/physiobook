@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 
 interface Slot {
   startTimeMs: number;
@@ -27,6 +27,51 @@ export default function WidgetPage() {
   const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+
+  // postMessage bridge for iframe embedding
+  const isEmbedded = useMemo(
+    () => typeof window !== "undefined" && window.parent !== window,
+    []
+  );
+
+  const postToParent = useCallback(
+    (data: Record<string, unknown>) => {
+      if (isEmbedded) {
+        window.parent.postMessage({ type: "physiobook-widget", ...data }, "*");
+      }
+    },
+    [isEmbedded]
+  );
+
+  function goToStep(newStep: Step) {
+    setStep(newStep);
+    postToParent({ event: "step-change", step: newStep });
+    if (newStep === "success") {
+      postToParent({ event: "success" });
+    }
+  }
+
+  // Report content height to parent via ResizeObserver
+  useEffect(() => {
+    if (!isEmbedded) return;
+
+    let raf: number;
+    const sendHeight = () => {
+      raf = requestAnimationFrame(() => {
+        const height = document.documentElement.scrollHeight;
+        postToParent({ event: "resize", height });
+      });
+    };
+
+    const observer = new ResizeObserver(sendHeight);
+    observer.observe(document.body);
+    sendHeight();
+
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(raf);
+    };
+  }, [isEmbedded, postToParent]);
 
   // Generate available dates (next 28 days)
   const availableDates: string[] = [];
@@ -76,13 +121,13 @@ export default function WidgetPage() {
   function handleDateSelect(date: string) {
     setSelectedDate(date);
     setSelectedSlot(null);
-    setStep("slot");
+    goToStep("slot");
     loadSlots(date);
   }
 
   function handleSlotSelect(slot: Slot) {
     setSelectedSlot(slot);
-    setStep("form");
+    goToStep("form");
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -123,7 +168,7 @@ export default function WidgetPage() {
         return;
       }
 
-      setStep("success");
+      goToStep("success");
     } catch {
       setSubmitError("Verbindungsfehler. Bitte versuchen Sie es erneut.");
     } finally {
@@ -142,7 +187,7 @@ export default function WidgetPage() {
   }
 
   function reset() {
-    setStep("date");
+    goToStep("date");
     setSelectedDate("");
     setSelectedSlot(null);
     setPatientName("");
@@ -206,7 +251,7 @@ export default function WidgetPage() {
       {step === "slot" && (
         <div>
           <button
-            onClick={() => setStep("date")}
+            onClick={() => goToStep("date")}
             className="text-sm text-blue-600 hover:text-blue-800 mb-3 flex items-center gap-1"
           >
             &larr; Anderes Datum
@@ -248,7 +293,7 @@ export default function WidgetPage() {
       {step === "form" && selectedSlot && (
         <div>
           <button
-            onClick={() => setStep("slot")}
+            onClick={() => goToStep("slot")}
             className="text-sm text-blue-600 hover:text-blue-800 mb-3 flex items-center gap-1"
           >
             &larr; Andere Uhrzeit

@@ -102,7 +102,7 @@ ecosystem.config.js     PM2-Konfiguration
 ### Voraussetzungen
 
 - Ein Server mit **Ubuntu 22.04 oder 24.04** (z.B. Hetzner Cloud ab CX22)
-- Eine **Domain** (z.B. `termine.meine-praxis.de`), die per DNS (A-Record) auf die IP-Adresse des Servers zeigt
+- Eine **Domain** (z.B. `kalender.therapiezentrum-ziesemer.de`), die per DNS (A-Record) auf die IP-Adresse des Servers zeigt
 - **SSH-Zugang** zum Server (z.B. ueber ein Terminal-Programm wie PuTTY oder das eingebaute Terminal auf Mac/Linux)
 - Optional: Ein **SMTP-Konto** fuer den E-Mail-Versand (z.B. von deinem Webhoster, Mailgun oder Postmark)
 
@@ -209,11 +209,11 @@ SMTP_FROM="Praxis Muster <praxis@example.com>"
 # --- Domain ---
 # Die Domain, unter der die App erreichbar sein wird.
 # Wichtig fuer die Sicherheit: Nur Anfragen von dieser Domain werden akzeptiert.
-ALLOWED_ORIGIN=https://termine.meine-praxis.de
+ALLOWED_ORIGIN=https://kalender.therapiezentrum-ziesemer.de
 
 # --- Widget (optional) ---
 # Nur noetig, wenn das Patienten-Widget auf einer ANDEREN Domain laeuft als die App.
-# Beispiel: App auf termine.meine-praxis.de, Widget eingebettet auf meine-praxis.de
+# Beispiel: App auf kalender.therapiezentrum-ziesemer.de, Widget eingebettet auf meine-praxis.de
 # Wenn beides auf der gleichen Domain laeuft, einfach leer lassen.
 WIDGET_ORIGIN=
 
@@ -285,11 +285,11 @@ Nginx ist der Webserver, der Anfragen aus dem Internet entgegennimmt und an die 
 # Konfigurationsdatei kopieren
 sudo cp /home/physiobook/physiobook/scripts/nginx.example.conf /etc/nginx/sites-available/physiobook
 
-# Domain anpassen -- ersetze "praxis.example.com" durch deine echte Domain:
+# Domain anpassen -- ersetze "kalender.therapiezentrum-ziesemer.de" durch deine echte Domain:
 sudo nano /etc/nginx/sites-available/physiobook
 ```
 
-In der Datei findest du mehrere Stellen mit `praxis.example.com` -- aendere alle auf deine Domain (z.B. `termine.meine-praxis.de`).
+In der Datei findest du mehrere Stellen mit `kalender.therapiezentrum-ziesemer.de` -- aendere alle auf deine Domain (z.B. `kalender.therapiezentrum-ziesemer.de`).
 
 ```bash
 # Konfiguration aktivieren
@@ -305,10 +305,10 @@ sudo nginx -t && sudo systemctl reload nginx
 Damit die App ueber eine sichere Verbindung (https://) erreichbar ist, brauchst du ein SSL-Zertifikat. Let's Encrypt stellt kostenlose Zertifikate aus:
 
 ```bash
-sudo certbot --nginx -d termine.meine-praxis.de
+sudo certbot --nginx -d kalender.therapiezentrum-ziesemer.de
 ```
 
-> Ersetze `termine.meine-praxis.de` durch deine echte Domain. Certbot fragt nach einer E-Mail-Adresse fuer Benachrichtigungen -- gib dort eine gueltige Adresse ein.
+> Ersetze `kalender.therapiezentrum-ziesemer.de` durch deine echte Domain. Certbot fragt nach einer E-Mail-Adresse fuer Benachrichtigungen -- gib dort eine gueltige Adresse ein.
 
 Zertifikate werden automatisch erneuert. Zum Testen:
 
@@ -367,12 +367,12 @@ chmod +x ~/physiobook/scripts/backup.sh
 Teste, ob die App laeuft:
 
 ```bash
-curl https://termine.meine-praxis.de/api/health
+curl https://kalender.therapiezentrum-ziesemer.de/api/health
 ```
 
 Erwartete Antwort: `{"status":"ok","timestamp":"...","dbOk":true}`
 
-Oeffne jetzt `https://termine.meine-praxis.de` im Browser und melde dich mit deinem Passwort an.
+Oeffne jetzt `https://kalender.therapiezentrum-ziesemer.de` im Browser und melde dich mit deinem Passwort an.
 
 **Optional:** Richte ein kostenloses Monitoring ein (z.B. [UptimeRobot](https://uptimerobot.com)), das alle 5 Minuten den Health-Endpunkt prueft und dich per E-Mail benachrichtigt, falls die App nicht erreichbar ist.
 
@@ -517,6 +517,6 @@ Alle Einstellungen in der `.env`-Datei auf einen Blick:
 | `SMTP_USER` | Benutzername fuer den E-Mail-Server | `praxis@example.com` |
 | `SMTP_PASS` | Passwort fuer den E-Mail-Server | -- |
 | `SMTP_FROM` | Absendername und -adresse fuer E-Mails | `"Praxis <praxis@example.com>"` |
-| `ALLOWED_ORIGIN` | Domain, auf der die App laeuft | `https://termine.meine-praxis.de` |
+| `ALLOWED_ORIGIN` | Domain, auf der die App laeuft | `https://kalender.therapiezentrum-ziesemer.de` |
 | `WIDGET_ORIGIN` | Domain des Widgets (nur bei separater Domain) | leer lassen bei gleicher Domain |
 | `TRUST_PROXY` | Immer `true` wenn hinter Nginx | `true` |

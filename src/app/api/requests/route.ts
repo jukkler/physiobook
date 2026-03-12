@@ -3,16 +3,23 @@ import { getDb } from "@/lib/db";
 import { escapeHtml } from "@/lib/html";
 import { isValidEmail, isValidDuration } from "@/lib/validation";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { corsHeaders, handlePreflight } from "@/lib/cors";
+
+// OPTIONS /api/requests (CORS preflight)
+export async function OPTIONS(req: Request) {
+  return handlePreflight(req) ?? new Response(null, { status: 204 });
+}
 
 // POST /api/requests - Public endpoint for patient appointment requests
 export async function POST(req: Request) {
+  const cors = corsHeaders(req);
   // Rate limit
   const ip = getClientIp(req);
   const rateLimit = checkRateLimit(`requests:${ip}`, 10, 60 * 60 * 1000);
   if (!rateLimit.allowed) {
     return Response.json(
       { error: "Zu viele Anfragen. Bitte warten Sie eine Stunde." },
-      { status: 429 }
+      { status: 429, headers: cors }
     );
   }
 
@@ -28,7 +35,7 @@ export async function POST(req: Request) {
   try {
     body = await req.json();
   } catch {
-    return Response.json({ error: "Ungültige Anfrage" }, { status: 400 });
+    return Response.json({ error: "Ungültige Anfrage" }, { status: 400, headers: cors });
   }
 
   const { slotStartMs, durationMinutes, patientName, contactEmail, contactPhone, consentGiven } = body;
@@ -37,31 +44,31 @@ export async function POST(req: Request) {
   if (!slotStartMs || !durationMinutes || !patientName || !contactEmail) {
     return Response.json(
       { error: "slotStartMs, durationMinutes, patientName und contactEmail sind Pflicht" },
-      { status: 400 }
+      { status: 400, headers: cors }
     );
   }
 
   if (patientName.length > 100) {
-    return Response.json({ error: "Name darf max. 100 Zeichen lang sein" }, { status: 400 });
+    return Response.json({ error: "Name darf max. 100 Zeichen lang sein" }, { status: 400, headers: cors });
   }
   if (contactEmail.length > 100) {
-    return Response.json({ error: "E-Mail darf max. 100 Zeichen lang sein" }, { status: 400 });
+    return Response.json({ error: "E-Mail darf max. 100 Zeichen lang sein" }, { status: 400, headers: cors });
   }
   if (contactPhone && contactPhone.length > 30) {
-    return Response.json({ error: "Telefonnummer darf max. 30 Zeichen lang sein" }, { status: 400 });
+    return Response.json({ error: "Telefonnummer darf max. 30 Zeichen lang sein" }, { status: 400, headers: cors });
   }
 
   if (!isValidDuration(durationMinutes)) {
     return Response.json(
       { error: "durationMinutes muss 15, 30, 45, 60 oder 90 sein" },
-      { status: 400 }
+      { status: 400, headers: cors }
     );
   }
 
   if (consentGiven !== true) {
     return Response.json(
       { error: "Einwilligung zur Datenverarbeitung ist erforderlich" },
-      { status: 400 }
+      { status: 400, headers: cors }
     );
   }
 
@@ -69,7 +76,7 @@ export async function POST(req: Request) {
   if (!isValidEmail(contactEmail)) {
     return Response.json(
       { error: "Ungültige E-Mail-Adresse" },
-      { status: 400 }
+      { status: 400, headers: cors }
     );
   }
 
@@ -77,7 +84,7 @@ export async function POST(req: Request) {
   if (slotStartMs <= Date.now()) {
     return Response.json(
       { error: "Termine können nur in der Zukunft gebucht werden" },
-      { status: 400 }
+      { status: 400, headers: cors }
     );
   }
 
@@ -127,7 +134,7 @@ export async function POST(req: Request) {
       ).run(
         uuidv4(),
         adminEmailSetting.value,
-        `Neue Terminanfrage von ${patientName}`,
+        `Neue Terminanfrage von ${patientName.replace(/[\r\n]/g, "")}`,
         `<p>Neue Terminanfrage von <strong>${escapeHtml(patientName)}</strong></p>
          <p>E-Mail: ${escapeHtml(contactEmail)}</p>
          ${contactPhone ? `<p>Telefon: ${escapeHtml(contactPhone)}</p>` : ""}
@@ -145,7 +152,7 @@ export async function POST(req: Request) {
     if (e instanceof Error && e.message === "SLOT_TAKEN") {
       return Response.json(
         { error: "Dieser Zeitslot wurde gerade vergeben. Bitte wählen Sie einen anderen." },
-        { status: 409 }
+        { status: 409, headers: cors }
       );
     }
     throw e;
@@ -156,6 +163,6 @@ export async function POST(req: Request) {
       id,
       message: "Ihre Anfrage wurde gesendet. Sie erhalten eine E-Mail bei Bestätigung.",
     },
-    { status: 201 }
+    { status: 201, headers: cors }
   );
 }

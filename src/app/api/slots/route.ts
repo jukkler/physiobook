@@ -1,5 +1,6 @@
 import { getDb } from "@/lib/db";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { corsHeaders, handlePreflight } from "@/lib/cors";
 
 interface SlotInfo {
   startTimeMs: number;
@@ -8,15 +9,21 @@ interface SlotInfo {
   endTimeLocal: string;
 }
 
+// OPTIONS /api/slots (CORS preflight)
+export async function OPTIONS(req: Request) {
+  return handlePreflight(req) ?? new Response(null, { status: 204 });
+}
+
 // GET /api/slots?date=YYYY-MM-DD
 export async function GET(req: Request) {
+  const cors = corsHeaders(req);
   // Rate limit
   const ip = getClientIp(req);
   const rateLimit = checkRateLimit(`slots:${ip}`, 60, 60 * 1000);
   if (!rateLimit.allowed) {
     return Response.json(
       { error: "Zu viele Anfragen. Bitte warten." },
-      { status: 429 }
+      { status: 429, headers: cors }
     );
   }
 
@@ -26,7 +33,7 @@ export async function GET(req: Request) {
   if (!dateParam || !/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
     return Response.json(
       { error: "Ungültiger date-Parameter (YYYY-MM-DD)" },
-      { status: 400 }
+      { status: 400, headers: cors }
     );
   }
 
@@ -72,13 +79,7 @@ export async function GET(req: Request) {
       const hours = Math.floor(currentMinutes / 60);
       const mins = currentMinutes % 60;
 
-      // Build ISO string for Europe/Berlin local time
-      const localTimeStr = `${dateParam}T${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}:00`;
-
       // Convert Europe/Berlin local time to UTC epoch ms
-      // Create date as if it's UTC, then adjust for timezone offset
-      const berlinDate = new Date(localTimeStr + "+00:00");
-      // Get the timezone offset for this specific date/time in Europe/Berlin
       const utcMs = berlinToUtcMs(dateParam, hours, mins);
 
       const slotEndMs = utcMs + slotDuration * 60_000;
@@ -107,7 +108,7 @@ export async function GET(req: Request) {
   const dayEndMs = futureSlots.length > 0 ? futureSlots[futureSlots.length - 1].endTimeMs : 0;
 
   if (futureSlots.length === 0) {
-    return Response.json([]);
+    return Response.json([], { headers: cors });
   }
 
   const occupiedAppointments = db
@@ -134,7 +135,7 @@ export async function GET(req: Request) {
     );
   });
 
-  return Response.json(availableSlots);
+  return Response.json(availableSlots, { headers: cors });
 }
 
 /**
