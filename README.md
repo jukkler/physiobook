@@ -161,7 +161,7 @@ sudo su - physiobook
 
 ```bash
 cd ~
-git clone <repo-url> physiobook
+git clone https://github.com/jukkler/physiobook.git
 cd physiobook
 
 # Abhaengigkeiten installieren
@@ -204,18 +204,18 @@ SMTP_HOST=smtp.example.com
 SMTP_PORT=587
 SMTP_USER=praxis@example.com
 SMTP_PASS=dein-smtp-passwort
-SMTP_FROM="Praxis Muster <praxis@example.com>"
+SMTP_FROM="Therapiezentrum Ziesemer <info@therapiezentrum-ziesemer.de>"
 
 # --- Domain ---
 # Die Domain, unter der die App erreichbar sein wird.
 # Wichtig fuer die Sicherheit: Nur Anfragen von dieser Domain werden akzeptiert.
 ALLOWED_ORIGIN=https://kalender.therapiezentrum-ziesemer.de
 
-# --- Widget (optional) ---
-# Nur noetig, wenn das Patienten-Widget auf einer ANDEREN Domain laeuft als die App.
-# Beispiel: App auf kalender.therapiezentrum-ziesemer.de, Widget eingebettet auf meine-praxis.de
-# Wenn beides auf der gleichen Domain laeuft, einfach leer lassen.
-WIDGET_ORIGIN=
+# --- Widget-Einbettung ---
+# Das Patienten-Widget wird per iFrame auf der Hauptwebsite eingebettet.
+# WIDGET_ORIGIN muss auf die Domain gesetzt werden, die das Widget einbettet,
+# damit die CORS-Headers fuer die API-Aufrufe aus dem iFrame funktionieren.
+WIDGET_ORIGIN=https://therapiezentrum-ziesemer.de
 
 # --- Proxy ---
 # Immer auf "true" setzen, wenn die App hinter Nginx laeuft (was bei diesem Setup der Fall ist).
@@ -518,5 +518,38 @@ Alle Einstellungen in der `.env`-Datei auf einen Blick:
 | `SMTP_PASS` | Passwort fuer den E-Mail-Server | -- |
 | `SMTP_FROM` | Absendername und -adresse fuer E-Mails | `"Praxis <praxis@example.com>"` |
 | `ALLOWED_ORIGIN` | Domain, auf der die App laeuft | `https://kalender.therapiezentrum-ziesemer.de` |
-| `WIDGET_ORIGIN` | Domain des Widgets (nur bei separater Domain) | leer lassen bei gleicher Domain |
+| `WIDGET_ORIGIN` | Domain, die das Widget per iFrame einbettet | `https://therapiezentrum-ziesemer.de` |
 | `TRUST_PROXY` | Immer `true` wenn hinter Nginx | `true` |
+
+---
+
+## Widget-Integration auf der Hauptwebsite
+
+Das Patienten-Widget (`/widget`) wird per iFrame auf `therapiezentrum-ziesemer.de/termin-anfragen/` eingebettet.
+
+### Funktionsweise
+
+1. **CORS:** Die API-Endpunkte `/api/slots` und `/api/requests` senden CORS-Headers, wenn der Request von `WIDGET_ORIGIN` kommt
+2. **postMessage:** Das Widget meldet seine Inhaltshoehe per `window.parent.postMessage()` an die einbettende Seite -- der iFrame passt sich dynamisch an
+3. **Events:** Das Widget sendet folgende postMessage-Events an die Parent-Seite:
+   - `{ type: "physiobook-widget", event: "resize", height: <px> }` -- bei jeder Groessenaenderung
+   - `{ type: "physiobook-widget", event: "step-change", step: "date"|"slot"|"form"|"success" }` -- bei Schrittwechsel
+   - `{ type: "physiobook-widget", event: "success" }` -- nach erfolgreicher Terminanfrage
+
+### Deployment-Reihenfolge
+
+Wenn Aenderungen an der Widget-Integration gemacht werden, **immer PhysioBook zuerst deployen**, dann die Website. So sind CORS-Headers und postMessage aktiv, bevor die Website den neuen iFrame laedt.
+
+```bash
+# 1. PhysioBook deployen
+cd /home/physiobook/physiobook
+git pull && npm ci --omit=dev && npm install --save-dev drizzle-kit tsx
+npm run build
+cp -r .next/static .next/standalone/.next/static
+cp -r public .next/standalone/public 2>/dev/null || true
+pm2 restart physiobook
+
+# 2. Website deployen
+cd /opt/website_therapie
+git pull && npm ci && npm run build
+```
