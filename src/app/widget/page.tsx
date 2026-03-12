@@ -151,7 +151,7 @@ export default function WidgetPage() {
           durationMinutes: duration,
           patientName,
           contactEmail,
-          contactPhone: contactPhone || undefined,
+          contactPhone,
           consentGiven: true,
         }),
       });
@@ -348,10 +348,11 @@ export default function WidgetPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Telefon
+                Telefon *
               </label>
               <input
                 type="tel"
+                required
                 value={contactPhone}
                 onChange={(e) => setContactPhone(e.target.value)}
                 className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"

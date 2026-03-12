@@ -38,7 +38,20 @@ export async function middleware(req: NextRequest) {
 
   // Public routes: allow through
   if (isPublicRoute(pathname)) {
-    return NextResponse.next();
+    const res = NextResponse.next();
+
+    // Allow widget to be embedded in the main website iframe
+    if (pathname === "/widget" || pathname.startsWith("/widget/")) {
+      const widgetOrigin = process.env.WIDGET_ORIGIN || "https://therapiezentrum-ziesemer.de";
+      res.headers.set(
+        "Content-Security-Policy",
+        `frame-ancestors 'self' ${widgetOrigin}`
+      );
+      // Remove X-Frame-Options if set (conflicts with frame-ancestors)
+      res.headers.delete("X-Frame-Options");
+    }
+
+    return res;
   }
 
   // Protected routes: check JWT signature + expiry (no DB access in Edge)

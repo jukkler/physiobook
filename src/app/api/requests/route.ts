@@ -41,9 +41,9 @@ export async function POST(req: Request) {
   const { slotStartMs, durationMinutes, patientName, contactEmail, contactPhone, consentGiven } = body;
 
   // Validation
-  if (!slotStartMs || !durationMinutes || !patientName || !contactEmail) {
+  if (!slotStartMs || !durationMinutes || !patientName || !contactEmail || !contactPhone) {
     return Response.json(
-      { error: "slotStartMs, durationMinutes, patientName und contactEmail sind Pflicht" },
+      { error: "slotStartMs, durationMinutes, patientName, contactEmail und contactPhone sind Pflicht" },
       { status: 400, headers: cors }
     );
   }
