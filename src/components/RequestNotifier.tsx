@@ -13,6 +13,7 @@ interface PendingRequest {
   startTime: number;
   endTime: number;
   durationMinutes: number;
+  notes: string | null;
   createdAt: number;
 }
 
@@ -284,6 +285,12 @@ export default function RequestNotifier({ onAction, portalTarget }: RequestNotif
               <span className="text-sm text-gray-500">Dauer</span>
               <p className="text-gray-900">{selectedRequest.durationMinutes} Minuten</p>
             </div>
+            {selectedRequest.notes && (
+              <div>
+                <span className="text-sm text-gray-500">Nachricht</span>
+                <p className="text-gray-900">{selectedRequest.notes}</p>
+              </div>
+            )}
           </div>
 
           {actionError && (

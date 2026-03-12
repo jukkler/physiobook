@@ -6,7 +6,7 @@ export const GET = withApiAuth(async () => {
   const rows = db
     .prepare(
       `SELECT id, patient_name, contact_email, contact_phone,
-              start_time, end_time, duration_minutes, created_at
+              start_time, end_time, duration_minutes, notes, created_at
        FROM appointments
        WHERE status = 'REQUESTED'
        ORDER BY created_at DESC`
@@ -19,6 +19,7 @@ export const GET = withApiAuth(async () => {
     start_time: number;
     end_time: number;
     duration_minutes: number;
+    notes: string | null;
     created_at: number;
   }>;
 
@@ -30,6 +31,7 @@ export const GET = withApiAuth(async () => {
     startTime: r.start_time,
     endTime: r.end_time,
     durationMinutes: r.duration_minutes,
+    notes: r.notes,
     createdAt: r.created_at,
   }));
 

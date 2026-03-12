@@ -24,6 +24,7 @@ export default function WidgetPage() {
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [duration, setDuration] = useState(30);
+  const [message, setMessage] = useState("");
   const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -152,6 +153,7 @@ export default function WidgetPage() {
           patientName,
           contactEmail,
           contactPhone,
+          message: message.trim() || undefined,
           consentGiven: true,
         }),
       });
@@ -199,6 +201,7 @@ export default function WidgetPage() {
     setPatientName("");
     setContactEmail("");
     setContactPhone("");
+    setMessage("");
     setDuration(30);
     setConsent(false);
     setSubmitError("");
@@ -374,6 +377,20 @@ export default function WidgetPage() {
                 <option value={60}>60 Minuten</option>
                 <option value={90}>90 Minuten</option>
               </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Nachricht <span className="font-normal text-gray-400">(optional)</span>
+              </label>
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                maxLength={500}
+                rows={3}
+                className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                placeholder="z.B. Beschwerden, Wünsche oder Anmerkungen"
+              />
             </div>
 
             <div>

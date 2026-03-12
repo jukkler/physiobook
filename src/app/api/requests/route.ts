@@ -29,6 +29,7 @@ export async function POST(req: Request) {
     patientName?: string;
     contactEmail?: string;
     contactPhone?: string;
+    message?: string;
     consentGiven?: boolean;
   };
 
@@ -38,7 +39,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "Ungültige Anfrage" }, { status: 400, headers: cors });
   }
 
-  const { slotStartMs, durationMinutes, patientName, contactEmail, contactPhone, consentGiven } = body;
+  const { slotStartMs, durationMinutes, patientName, contactEmail, contactPhone, message, consentGiven } = body;
 
   // Validation
   if (!slotStartMs || !durationMinutes || !patientName || !contactEmail || !contactPhone) {
@@ -56,6 +57,9 @@ export async function POST(req: Request) {
   }
   if (contactPhone && contactPhone.length > 30) {
     return Response.json({ error: "Telefonnummer darf max. 30 Zeichen lang sein" }, { status: 400, headers: cors });
+  }
+  if (message && message.length > 500) {
+    return Response.json({ error: "Nachricht darf max. 500 Zeichen lang sein" }, { status: 400, headers: cors });
   }
 
   if (!isValidDuration(durationMinutes)) {
@@ -117,10 +121,11 @@ export async function POST(req: Request) {
     }
 
     // INSERT with REQUESTED status
+    const sanitizedMessage = message?.trim().replace(/[\r\n]+/g, " ") || null;
     db.prepare(
       `INSERT INTO appointments (id, patient_name, start_time, end_time, duration_minutes, status, series_id, contact_email, contact_phone, notes, flagged_notes, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'REQUESTED', NULL, ?, ?, NULL, 0, ?, ?)`
-    ).run(id, patientName, slotStartMs, endTimeMs, durationMinutes, contactEmail, contactPhone || null, now, now);
+       VALUES (?, ?, ?, ?, ?, 'REQUESTED', NULL, ?, ?, ?, 0, ?, ?)`
+    ).run(id, patientName, slotStartMs, endTimeMs, durationMinutes, contactEmail, contactPhone || null, sanitizedMessage, now, now);
 
     // Queue notification email to admin
     const adminEmailSetting = db
@@ -139,7 +144,8 @@ export async function POST(req: Request) {
          <p>E-Mail: ${escapeHtml(contactEmail)}</p>
          ${contactPhone ? `<p>Telefon: ${escapeHtml(contactPhone)}</p>` : ""}
          <p>Zeitpunkt: ${new Date(slotStartMs).toLocaleString("de-DE", { timeZone: "Europe/Berlin" })}</p>
-         <p>Dauer: ${durationMinutes} Minuten</p>`,
+         <p>Dauer: ${durationMinutes} Minuten</p>
+         ${sanitizedMessage ? `<p>Nachricht: ${escapeHtml(sanitizedMessage)}</p>` : ""}`,
         now
       );
     }
