@@ -16,6 +16,7 @@ const PUBLIC_ROUTES = [
   "/api/requests",
   "/api/health",
   "/api/cron",
+  "/api/contact",
 ];
 
 function isPublicRoute(pathname: string): boolean {

@@ -9,6 +9,7 @@ import AppointmentForm from "./forms/AppointmentForm";
 import BlockerForm from "./forms/BlockerForm";
 import BlockerDeleteModal from "./dashboard/BlockerDeleteModal";
 import BulkDeleteModal from "./dashboard/BulkDeleteModal";
+import RequestNotifier from "./RequestNotifier";
 import { getWeekMonday, addDays, berlinDayStartMs, getMonthName, todayBerlin } from "@/lib/time";
 import type { Appointment, Blocker } from "@/lib/db/schema";
 
@@ -20,9 +21,11 @@ export default function DashboardClient() {
   const [columnMode, setColumnMode] = useState<"split" | "single">("split");
   const [zoomLevel, setZoomLevel] = useState(100);
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  const [mailboxPortal, setMailboxPortal] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
     setPortalTarget(document.getElementById("header-toggle-portal"));
+    setMailboxPortal(document.getElementById("header-mailbox-portal"));
   }, []);
 
   // Load saved preferences
@@ -327,6 +330,11 @@ export default function DashboardClient() {
           />
         );
       })()}
+
+      <RequestNotifier
+        onAction={() => setRefreshKey((k) => k + 1)}
+        portalTarget={mailboxPortal}
+      />
 
       {portalTarget && view === "day" && createPortal(
         <div className="flex items-center gap-2">
