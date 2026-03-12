@@ -73,12 +73,18 @@ export default function WidgetPage() {
     };
   }, [isEmbedded, postToParent]);
 
-  // Generate available dates (next 28 days)
+  // Generate available dates (next 28 days, excluding Sundays)
   const availableDates: string[] = [];
   const now = new Date();
   for (let i = 1; i <= 28; i++) {
     const d = new Date(now);
     d.setDate(d.getDate() + i);
+    // Check day of week in Europe/Berlin timezone
+    const berlinDay = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Europe/Berlin",
+      weekday: "short",
+    }).format(d);
+    if (berlinDay === "Sun") continue;
     const dateStr = new Intl.DateTimeFormat("en-CA", {
       timeZone: "Europe/Berlin",
       year: "numeric",

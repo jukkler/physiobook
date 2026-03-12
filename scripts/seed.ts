@@ -37,7 +37,7 @@ if (!existingAdmin) {
 const defaultSettings: Record<string, string> = {
   morningStart: "08:00",
   morningEnd: "13:00",
-  afternoonStart: "13:00",
+  afternoonStart: "15:00",
   afternoonEnd: "20:00",
   slotDuration: "30",
   requestTimeoutHours: "48",
