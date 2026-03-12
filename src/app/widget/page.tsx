@@ -38,7 +38,7 @@ export default function WidgetPage() {
   const postToParent = useCallback(
     (data: Record<string, unknown>) => {
       if (isEmbedded) {
-        window.parent.postMessage({ type: "physiobook-widget", ...data }, "*");
+        window.parent.postMessage({ type: "physiobook-widget", ...data }, process.env.NEXT_PUBLIC_WIDGET_ORIGIN || "https://therapiezentrum-ziesemer.de");
       }
     },
     [isEmbedded]
