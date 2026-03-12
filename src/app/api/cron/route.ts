@@ -5,7 +5,7 @@ import { expireTimedOutRequests } from "@/lib/cron/expire";
 import { runRetentionCleanup } from "@/lib/cron/cleanup";
 import { runAutoArchive } from "@/lib/cron/auto-archive";
 
-const CRON_SECRET = process.env.CRON_SECRET || "dev-cron-secret";
+const CRON_SECRET = process.env.CRON_SECRET!;
 
 export async function POST(req: Request) {
   const authHeader = req.headers.get("authorization");

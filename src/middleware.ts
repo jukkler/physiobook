@@ -3,7 +3,7 @@ import { jwtVerify } from "jose";
 
 const COOKIE_NAME = "physiobook_session";
 const JWT_SECRET_KEY = new TextEncoder().encode(
-  process.env.JWT_SECRET || "dev-secret-change-in-production"
+  process.env.JWT_SECRET!
 );
 
 // Routes that don't require authentication

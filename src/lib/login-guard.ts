@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 import { getDb } from "./db";
 import { loginAttempts } from "./db/schema";
 
-const LOGIN_SALT = process.env.LOGIN_SALT || "dev-salt";
+const LOGIN_SALT = process.env.LOGIN_SALT!;
 const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
