@@ -54,17 +54,35 @@ export async function GET(req: Request) {
 
   const morningStart = config.morningStart || "08:00";
   const morningEnd = config.morningEnd || "13:00";
-  const afternoonStart = config.afternoonStart || "13:00";
+  const afternoonStart = config.afternoonStart || "15:00";
   const afternoonEnd = config.afternoonEnd || "20:00";
   const slotDuration = parseInt(config.slotDuration || "30", 10);
+
+  // Determine day of week in Europe/Berlin timezone
+  const [year, month, day] = dateParam.split("-").map(Number);
+  const approxDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0)); // noon UTC to avoid DST edge
+  const berlinDay = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Berlin",
+    weekday: "short",
+  }).format(approxDate);
+
+  // Sunday → no slots
+  if (berlinDay === "Sun") {
+    return Response.json([], { headers: cors });
+  }
+
+  // Build time ranges based on day of week
+  const isSaturday = berlinDay === "Sat";
 
   // Generate time slots for the given date in Europe/Berlin
   const slots: SlotInfo[] = [];
 
-  const timeRanges = [
-    { start: morningStart, end: morningEnd },
-    { start: afternoonStart, end: afternoonEnd },
-  ];
+  const timeRanges: { start: string; end: string }[] = isSaturday
+    ? [{ start: "10:00", end: "13:00" }]
+    : [
+        { start: morningStart, end: morningEnd },
+        { start: afternoonStart, end: afternoonEnd },
+      ];
 
   for (const range of timeRanges) {
     const [startH, startM] = range.start.split(":").map(Number);
