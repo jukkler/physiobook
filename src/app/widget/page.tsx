@@ -28,6 +28,8 @@ export default function WidgetPage() {
   const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [dateAvailability, setDateAvailability] = useState<Record<string, boolean>>({});
+  const [loadingAvailability, setLoadingAvailability] = useState(true);
 
   // postMessage bridge for iframe embedding
   const isEmbedded = useMemo(
@@ -97,6 +99,18 @@ export default function WidgetPage() {
       availableDates.push(dateStr);
     }
   }
+
+  // Fetch availability for all dates on mount
+  useEffect(() => {
+    if (availableDates.length === 0) return;
+    setLoadingAvailability(true);
+    fetch(`/api/slots/availability?dates=${availableDates.join(",")}`)
+      .then((res) => (res.ok ? res.json() : {}))
+      .then((data) => setDateAvailability(data))
+      .catch(() => {})
+      .finally(() => setLoadingAvailability(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function loadSlots(date: string) {
     setLoadingSlots(true);
@@ -242,17 +256,32 @@ export default function WidgetPage() {
           <h2 className="text-sm font-semibold text-gray-700 mb-3">
             Tag auswählen
           </h2>
-          <div className="grid grid-cols-2 gap-2">
-            {availableDates.map((d) => (
-              <button
-                key={d}
-                onClick={() => handleDateSelect(d)}
-                className="px-3 py-2 text-sm border rounded-md hover:bg-blue-50 hover:border-blue-300 text-left transition-colors"
-              >
-                {formatDateDisplay(d)}
-              </button>
-            ))}
-          </div>
+          {loadingAvailability ? (
+            <div className="text-center py-8 text-gray-400">Verfügbarkeit wird geladen...</div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              {availableDates.map((d) => {
+                const available = dateAvailability[d] !== false;
+                return (
+                  <button
+                    key={d}
+                    onClick={() => available && handleDateSelect(d)}
+                    disabled={!available}
+                    className={`px-3 py-2 text-sm border rounded-md text-left transition-colors ${
+                      available
+                        ? "hover:bg-blue-50 hover:border-blue-300"
+                        : "opacity-40 cursor-not-allowed bg-gray-50 text-gray-400"
+                    }`}
+                  >
+                    {formatDateDisplay(d)}
+                    {!available && (
+                      <span className="block text-xs text-gray-400">ausgebucht</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
