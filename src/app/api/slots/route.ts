@@ -55,7 +55,9 @@ export async function GET(req: Request) {
   const morningStart = config.morningStart || "08:00";
   const morningEnd = config.morningEnd || "13:00";
   const afternoonStart = config.afternoonStart || "15:00";
-  const afternoonEnd = config.afternoonEnd || "20:00";
+  // Cap at 19:00 so last bookable slot is 18:30 (with 30min duration)
+  const rawAfternoonEnd = config.afternoonEnd || "20:00";
+  const afternoonEnd = rawAfternoonEnd > "19:00" ? "19:00" : rawAfternoonEnd;
   const slotDuration = parseInt(config.slotDuration || "30", 10);
 
   // Determine day of week in Europe/Berlin timezone
