@@ -115,7 +115,7 @@ export async function POST(req: Request) {
     ).run(
       uuidv4(),
       adminEmailSetting.value,
-      `Kontaktformular: ${escapeHtml(betreff).slice(0, 100)}`,
+      `Kontaktformular: ${betreff.replace(/[\r\n]/g, "").slice(0, 100)}`,
       `<h2>Neue Kontaktanfrage über die Website</h2>
        <p><strong>Name:</strong> ${escapeHtml(fullName)}</p>
        <p><strong>E-Mail:</strong> <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a></p>

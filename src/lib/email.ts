@@ -69,7 +69,7 @@ export async function processEmailQueue(): Promise<number> {
       await mailer.sendMail({
         from: smtpConfig.from,
         to: email.to_address,
-        subject: email.subject,
+        subject: email.subject.replace(/[\r\n]/g, ""),
         html: email.html,
       });
 
