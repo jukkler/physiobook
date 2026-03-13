@@ -194,23 +194,6 @@ export const PATCH = withApiAuth(async (req, ctx) => {
     }
 
     const updateSeries = db.transaction(() => {
-      // Update name, duration, contact fields
-      db.prepare(
-        `UPDATE appointments SET
-          patient_name = COALESCE(?, patient_name),
-          duration_minutes = COALESCE(?, duration_minutes),
-          contact_email = COALESCE(?, contact_email),
-          contact_phone = COALESCE(?, contact_phone),
-          updated_at = ?
-        WHERE series_id = ?`
-      ).run(
-        body.patientName || null,
-        body.durationMinutes || null,
-        body.contactEmail ?? null,
-        body.contactPhone ?? null,
-        now, seriesId
-      );
-
       // If time changed, shift all appointments by the same delta
       if (timeDelta !== 0) {
         db.prepare(
@@ -223,15 +206,27 @@ export const PATCH = withApiAuth(async (req, ctx) => {
         ).run(timeDelta, timeDelta, now, seriesId);
       }
 
-      // If duration changed, recalculate endTime for all
-      if (body.durationMinutes) {
-        db.prepare(
-          `UPDATE appointments SET
-            end_time = start_time + ? * 60000,
-            updated_at = ?
-          WHERE series_id = ?`
-        ).run(body.durationMinutes, now, seriesId);
-      }
+      // Update name, duration, contact fields
+      // end_time must be updated in the same statement as duration_minutes
+      // to satisfy CHECK constraint: (end_time - start_time) = duration_minutes * 60000
+      db.prepare(
+        `UPDATE appointments SET
+          patient_name = COALESCE(?, patient_name),
+          duration_minutes = COALESCE(?, duration_minutes),
+          end_time = CASE WHEN ? IS NOT NULL THEN start_time + ? * 60000 ELSE end_time END,
+          contact_email = COALESCE(?, contact_email),
+          contact_phone = COALESCE(?, contact_phone),
+          updated_at = ?
+        WHERE series_id = ?`
+      ).run(
+        body.patientName || null,
+        body.durationMinutes || null,
+        body.durationMinutes || null,
+        body.durationMinutes || null,
+        body.contactEmail ?? null,
+        body.contactPhone ?? null,
+        now, seriesId
+      );
     });
     updateSeries();
 
