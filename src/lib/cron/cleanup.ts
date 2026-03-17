@@ -38,7 +38,7 @@ export function runRetentionCleanup(): CleanupResult {
     .prepare(
       `DELETE FROM email_outbox WHERE status = 'SENT' AND created_at < ?`
     )
-    .run(now - 30 * 24 * 60 * 60 * 1000).changes;
+    .run(now - 180 * 24 * 60 * 60 * 1000).changes;
 
   const cleanedOutboxFailed = db
     .prepare(
