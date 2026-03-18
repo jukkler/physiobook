@@ -9,6 +9,7 @@ import AppointmentForm from "./forms/AppointmentForm";
 import BlockerForm from "./forms/BlockerForm";
 import BlockerDeleteModal from "./dashboard/BlockerDeleteModal";
 import BulkDeleteModal from "./dashboard/BulkDeleteModal";
+import FindSlotDialog from "./dashboard/FindSlotDialog";
 import RequestNotifier from "./RequestNotifier";
 import { getWeekMonday, addDays, berlinDayStartMs, getMonthName, todayBerlin } from "@/lib/time";
 import type { Appointment, Blocker } from "@/lib/db/schema";
@@ -65,6 +66,7 @@ export default function DashboardClient() {
   const [deleteScope, setDeleteScope] = useState<"single" | "group">("single");
   const [deleting, setDeleting] = useState(false);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [showFindSlot, setShowFindSlot] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // Refresh key to force re-fetch in child components
@@ -223,6 +225,12 @@ export default function DashboardClient() {
             + Termin
           </button>
           <button
+            onClick={() => setShowFindSlot(true)}
+            className="px-3 py-1.5 text-sm bg-green-600 text-white rounded-md hover:bg-green-700"
+          >
+            Termin finden
+          </button>
+          <button
             onClick={() => setShowBlockerForm(true)}
             className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded-md hover:bg-gray-800"
           >
@@ -290,6 +298,16 @@ export default function DashboardClient() {
       </div>
 
       {/* Modals */}
+      {showFindSlot && (
+        <FindSlotDialog
+          onSelectSlot={(startTimeMs) => {
+            setShowFindSlot(false);
+            handleCreateAppointment(startTimeMs);
+          }}
+          onClose={() => setShowFindSlot(false)}
+        />
+      )}
+
       {showAppointmentForm && (
         <AppointmentForm
           appointment={editingAppointment ?? undefined}
