@@ -86,7 +86,7 @@ export async function GET(req: Request) {
 
     const isSaturday = berlinDay === "Sat";
     const timeRanges = isSaturday
-      ? [{ start: "10:00", end: "13:00" }]
+      ? [{ start: "10:00", end: "12:00" }]
       : [
           { start: morningStart, end: morningEnd },
           { start: afternoonStart, end: afternoonEnd },

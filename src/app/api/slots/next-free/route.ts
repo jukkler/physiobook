@@ -69,7 +69,7 @@ export const GET = withApiAuth(async (req) => {
 
     const isSaturday = berlinDay === "Sat";
     const timeRanges: { start: string; end: string }[] = isSaturday
-      ? [{ start: "10:00", end: "13:00" }]
+      ? [{ start: "10:00", end: "12:00" }]
       : [
           { start: morningStart, end: morningEnd },
           { start: afternoonStart, end: afternoonEnd },
