@@ -138,7 +138,6 @@ export default function WeekView({
     EXPIRED: "bg-gray-200 border-gray-300",
   };
 
-  const lunchStartMin = 13 * 60;
   const lunchEndMin = 15 * 60;
 
   const todayStr = todayBerlin();
@@ -252,10 +251,14 @@ export default function WeekView({
                       />
                     ))}
 
-                    {/* Mittagspause: Mo-Fr 13-15 Uhr */}
+                    {/* Mittagspause: Mo-Fr, Thu starts 12:30, others 13:00 */}
                     {dayIdx < 5 && (() => {
-                      const lunchTopPct = ((13 - startH) / totalHours) * 100;
-                      const lunchHeightPct = (2 / totalHours) * 100;
+                      const isThursday = dayIdx === 3; // 0=Mo, 3=Do
+                      const lunchStartMin = isThursday ? 12 * 60 + 30 : 13 * 60;
+                      const lunchStartH = lunchStartMin / 60;
+                      const lunchDurationH = (lunchEndMin - lunchStartMin) / 60;
+                      const lunchTopPct = ((lunchStartH - startH) / totalHours) * 100;
+                      const lunchHeightPct = (lunchDurationH / totalHours) * 100;
                       return (
                         <div
                           className="absolute left-0 right-0 bg-gray-200/60 flex items-center justify-center pointer-events-none"
@@ -313,7 +316,8 @@ export default function WeekView({
                         }).format(new Date(a.endTime));
                         const [aH, aM] = apptStartBerlin.split(":").map(Number);
                         const [eH, eM] = apptEndBerlin.split(":").map(Number);
-                        const apptInLunch = dayIdx < 5 && (aH * 60 + aM) >= lunchStartMin && (eH * 60 + eM) <= lunchEndMin;
+                        const dayLunchStart = dayIdx === 3 ? 12 * 60 + 30 : 13 * 60;
+                        const apptInLunch = dayIdx < 5 && (aH * 60 + aM) >= dayLunchStart && (eH * 60 + eM) <= lunchEndMin;
                         const palette = apptInLunch ? LUNCH_STATUS_COLORS : STATUS_COLORS;
 
                         const col = layout.get(a.id);
