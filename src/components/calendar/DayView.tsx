@@ -86,16 +86,21 @@ export default function DayView({
   }
 
   const morningStart = settings?.morningStart || "08:00";
-  const morningEnd = settings?.morningEnd || "13:00";
+  const baseMorningEnd = settings?.morningEnd || "13:00";
   const afternoonStart = settings?.afternoonStart || "13:00";
   const afternoonEnd = settings?.afternoonEnd || "20:00";
   const slotDuration = parseInt(settings?.slotDuration || "30", 10);
 
-  // Mittagspause: Mo-Fr 13:00-15:00
-  const lunchStartMin = 13 * 60;
-  const lunchEndMin = 15 * 60;
   const dayOfWeek = new Date(date + "T12:00:00Z").getUTCDay(); // 0=So, 1=Mo, ..., 5=Fr, 6=Sa
   const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+  const isThursday = dayOfWeek === 4;
+
+  // Thursday: morning ends at 12:30 instead of 13:00
+  const morningEnd = isThursday ? "12:30" : baseMorningEnd;
+
+  // Mittagspause: Mo-Fr, starts 12:30 on Thu, 13:00 otherwise
+  const lunchStartMin = isThursday ? 12 * 60 + 30 : 13 * 60;
+  const lunchEndMin = 15 * 60;
 
   function generateSlots(start: string, end: string) {
     const [startH, startM] = start.split(":").map(Number);

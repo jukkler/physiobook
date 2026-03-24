@@ -75,6 +75,10 @@ export async function GET(req: Request) {
 
   // Build time ranges based on day of week
   const isSaturday = berlinDay === "Sat";
+  const isThursday = berlinDay === "Thu";
+
+  // Thursday: morning ends at 12:30 instead of 13:00
+  const effectiveMorningEnd = isThursday ? "12:30" : morningEnd;
 
   // Generate time slots for the given date in Europe/Berlin
   const slots: SlotInfo[] = [];
@@ -82,7 +86,7 @@ export async function GET(req: Request) {
   const timeRanges: { start: string; end: string }[] = isSaturday
     ? [{ start: "10:00", end: "12:00" }]
     : [
-        { start: morningStart, end: morningEnd },
+        { start: morningStart, end: effectiveMorningEnd },
         { start: afternoonStart, end: afternoonEnd },
       ];
 
