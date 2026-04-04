@@ -182,7 +182,7 @@ export default function PatientenClient() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 sticky top-0 bg-gray-50 z-10 py-2 -mt-2">
         <input
           type="text"
           value={search}
