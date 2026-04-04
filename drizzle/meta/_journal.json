@@ -43,6 +43,13 @@
       "when": 1772093400000,
       "tag": "0006_add_90min_duration",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1772093500000,
+      "tag": "0007_add_patient_id",
+      "breakpoints": true
     }
   ]
 }
