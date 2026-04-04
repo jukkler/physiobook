@@ -27,7 +27,7 @@ export default async function PatientenPage() {
           </div>
         </div>
       </header>
-      <main className="max-w-7xl mx-auto px-4 py-4 flex-1 w-full overflow-auto">
+      <main className="max-w-7xl mx-auto px-4 pt-0 pb-4 flex-1 w-full overflow-auto">
         <PatientenClient />
       </main>
     </div>
