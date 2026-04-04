@@ -17,6 +17,7 @@ export default async function DashboardPage() {
             <h1 className="text-xl font-bold text-gray-900">Kalender</h1>
           </div>
           <div className="flex items-center gap-4">
+            <div id="header-search-portal" />
             <div id="header-mailbox-portal" />
             <div id="header-toggle-portal" />
             <UserMenu

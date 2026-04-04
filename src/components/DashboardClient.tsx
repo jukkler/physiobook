@@ -24,10 +24,12 @@ export default function DashboardClient() {
   const [zoomLevel, setZoomLevel] = useState(100);
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [mailboxPortal, setMailboxPortal] = useState<HTMLElement | null>(null);
+  const [searchPortal, setSearchPortal] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
     setPortalTarget(document.getElementById("header-toggle-portal"));
     setMailboxPortal(document.getElementById("header-mailbox-portal"));
+    setSearchPortal(document.getElementById("header-search-portal"));
   }, []);
 
   // Load saved preferences
@@ -233,12 +235,6 @@ export default function DashboardClient() {
             Termin finden
           </button>
           <button
-            onClick={() => setShowPatientSearch(true)}
-            className="px-3 py-1.5 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700"
-          >
-            Suche
-          </button>
-          <button
             onClick={() => setShowBlockerForm(true)}
             className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded-md hover:bg-gray-800"
           >
@@ -365,6 +361,19 @@ export default function DashboardClient() {
         onAction={() => setRefreshKey((k) => k + 1)}
         portalTarget={mailboxPortal}
       />
+
+      {searchPortal && createPortal(
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Patient suchen..."
+            className="w-44 px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+            onFocus={() => setShowPatientSearch(true)}
+            readOnly
+          />
+        </div>,
+        searchPortal
+      )}
 
       {portalTarget && view === "day" && createPortal(
         <div className="flex items-center gap-2">
