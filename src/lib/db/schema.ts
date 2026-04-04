@@ -8,6 +8,7 @@ export const appointments = sqliteTable(
   {
     id: text("id").primaryKey(),
     patientName: text("patient_name").notNull(),
+    patientId: text("patient_id"), // FK to patients.id
     startTime: integer("start_time").notNull(), // epoch ms (UTC)
     endTime: integer("end_time").notNull(), // epoch ms (UTC), persisted
     durationMinutes: integer("duration_minutes").notNull(),
@@ -15,8 +16,6 @@ export const appointments = sqliteTable(
       enum: ["REQUESTED", "CONFIRMED", "CANCELLED", "EXPIRED"],
     }).notNull(),
     seriesId: text("series_id"),
-    contactEmail: text("contact_email"),
-    contactPhone: text("contact_phone"),
     notes: text("notes"), // admin-only, max 200 chars, server-filtered
     flaggedNotes: integer("flagged_notes").notNull().default(0),
     reminderSent: integer("reminder_sent").notNull().default(0), // 0 or 1
@@ -35,6 +34,7 @@ export const appointments = sqliteTable(
       table.createdAt,
       table.status
     ),
+    index("idx_appointments_patient_id").on(table.patientId),
   ]
 );
 
@@ -134,6 +134,11 @@ export const patients = sqliteTable(
 // --- Type exports ---
 
 export type Appointment = typeof appointments.$inferSelect;
+/** Appointment joined with patient contact info for API responses */
+export interface AppointmentWithContact extends Appointment {
+  contactEmail: string | null;
+  contactPhone: string | null;
+}
 export type NewAppointment = typeof appointments.$inferInsert;
 export type Blocker = typeof blockers.$inferSelect;
 export type NewBlocker = typeof blockers.$inferInsert;
