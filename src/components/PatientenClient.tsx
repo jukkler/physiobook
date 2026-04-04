@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import PatientAppointmentsDialog from "./dashboard/PatientSearchDialog";
+import PatientenMergeDialog from "./PatientenMergeDialog";
 
 interface Patient {
   id: string;
@@ -35,6 +36,8 @@ export default function PatientenClient() {
 
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [showMerge, setShowMerge] = useState(false);
 
   const loadPatients = useCallback(async (q?: string) => {
     try {
@@ -167,6 +170,16 @@ export default function PatientenClient() {
     }
   }
 
+  function toggleChecked(id: string) {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  const checkedPatients = patients.filter((p) => checkedIds.has(p.id));
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
@@ -194,6 +207,14 @@ export default function PatientenClient() {
         >
           {importing ? "Importiere..." : "CSV Import"}
         </button>
+        {checkedIds.size >= 2 && (
+          <button
+            onClick={() => setShowMerge(true)}
+            className="px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-md hover:bg-amber-700 transition-colors whitespace-nowrap"
+          >
+            Zusammenlegen ({checkedIds.size})
+          </button>
+        )}
         <button
           onClick={() => setShowNew(true)}
           className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors whitespace-nowrap"
@@ -264,6 +285,7 @@ export default function PatientenClient() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>
+                <th className="px-4 py-2 w-8" />
                 <th className="text-left px-4 py-2 font-medium text-gray-600">Name</th>
                 <th className="text-left px-4 py-2 font-medium text-gray-600">E-Mail</th>
                 <th className="text-left px-4 py-2 font-medium text-gray-600">Telefon</th>
@@ -274,6 +296,9 @@ export default function PatientenClient() {
               {patients.map((p) =>
                 editId === p.id ? (
                   <tr key={p.id} className="bg-blue-50">
+                    <td className="px-4 py-2">
+                      <input type="checkbox" checked={checkedIds.has(p.id)} onChange={() => toggleChecked(p.id)} className="rounded" />
+                    </td>
                     <td className="px-4 py-2">
                       <input
                         type="text"
@@ -318,6 +343,9 @@ export default function PatientenClient() {
                   </tr>
                 ) : (
                   <tr key={p.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-2">
+                      <input type="checkbox" checked={checkedIds.has(p.id)} onChange={() => toggleChecked(p.id)} className="rounded" />
+                    </td>
                     <td
                       className="px-4 py-2 text-blue-600 hover:text-blue-800 cursor-pointer font-medium"
                       onClick={() => setSelectedPatient(p)}
@@ -354,6 +382,20 @@ export default function PatientenClient() {
           patient={selectedPatient}
           onClose={() => setSelectedPatient(null)}
           onGoToDate={() => {}}
+        />
+      )}
+
+      {showMerge && checkedPatients.length >= 2 && (
+        <PatientenMergeDialog
+          patients={checkedPatients}
+          onClose={() => setShowMerge(false)}
+          onMerged={() => {
+            setShowMerge(false);
+            setCheckedIds(new Set());
+            loadPatients(search || undefined);
+            setMessage({ type: "success", text: "Patienten zusammengelegt" });
+            setTimeout(() => setMessage(null), 3000);
+          }}
         />
       )}
     </div>
