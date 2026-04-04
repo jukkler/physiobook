@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import DayView from "./calendar/DayView";
 import WeekView from "./calendar/WeekView";
@@ -10,7 +10,7 @@ import BlockerForm from "./forms/BlockerForm";
 import BlockerDeleteModal from "./dashboard/BlockerDeleteModal";
 import BulkDeleteModal from "./dashboard/BulkDeleteModal";
 import FindSlotDialog from "./dashboard/FindSlotDialog";
-import PatientSearchDialog from "./dashboard/PatientSearchDialog";
+import PatientAppointmentsDialog from "./dashboard/PatientSearchDialog";
 import RequestNotifier from "./RequestNotifier";
 import { getWeekMonday, addDays, berlinDayStartMs, getMonthName, todayBerlin } from "@/lib/time";
 import type { Appointment, AppointmentWithContact, Blocker } from "@/lib/db/schema";
@@ -70,11 +70,57 @@ export default function DashboardClient() {
   const [deleting, setDeleting] = useState(false);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [showFindSlot, setShowFindSlot] = useState(false);
-  const [showPatientSearch, setShowPatientSearch] = useState(false);
+  const [selectedSearchPatient, setSelectedSearchPatient] = useState<{ id: string; name: string; email: string | null; phone: string | null } | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<{ id: string; name: string; email: string | null; phone: string | null }[]>([]);
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // Refresh key to force re-fetch in child components
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Patient search in navbar
+  function handleSearchInput(value: string) {
+    setSearchQuery(value);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    if (value.length < 2) {
+      setSearchResults([]);
+      setShowSearchDropdown(false);
+      return;
+    }
+    searchDebounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/patients?q=${encodeURIComponent(value)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data.patients || []);
+          setShowSearchDropdown((data.patients || []).length > 0);
+        }
+      } catch { /* silent */ }
+    }, 300);
+  }
+
+  function handleSelectSearchPatient(p: { id: string; name: string; email: string | null; phone: string | null }) {
+    setSelectedSearchPatient(p);
+    setShowSearchDropdown(false);
+    setSearchQuery("");
+    setSearchResults([]);
+  }
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setShowSearchDropdown(false);
+      }
+    }
+    if (showSearchDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showSearchDropdown]);
 
   function handleCreateAppointment(startTimeMs: number) {
     setNewAppointmentStartMs(startTimeMs);
@@ -302,8 +348,11 @@ export default function DashboardClient() {
       </div>
 
       {/* Modals */}
-      {showPatientSearch && (
-        <PatientSearchDialog onClose={() => setShowPatientSearch(false)} />
+      {selectedSearchPatient && (
+        <PatientAppointmentsDialog
+          patient={selectedSearchPatient}
+          onClose={() => setSelectedSearchPatient(null)}
+        />
       )}
 
       {showFindSlot && (
@@ -363,14 +412,30 @@ export default function DashboardClient() {
       />
 
       {searchPortal && createPortal(
-        <div className="relative">
+        <div className="relative" ref={searchContainerRef}>
           <input
             type="text"
             placeholder="Patient suchen..."
-            className="w-44 px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
-            onFocus={() => setShowPatientSearch(true)}
-            readOnly
+            value={searchQuery}
+            onChange={(e) => handleSearchInput(e.target.value)}
+            className="w-48 px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
           />
+          {showSearchDropdown && searchResults.length > 0 && (
+            <div className="absolute top-full right-0 mt-1 w-72 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
+              {searchResults.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => handleSelectSearchPatient(p)}
+                  className="w-full text-left px-3 py-2 hover:bg-blue-50 transition-colors border-b border-gray-50 last:border-0"
+                >
+                  <div className="text-sm font-medium text-gray-900">{p.name}</div>
+                  <div className="text-xs text-gray-500">
+                    {[p.email, p.phone].filter(Boolean).join(" · ") || "Keine Kontaktdaten"}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>,
         searchPortal
       )}
