@@ -48,9 +48,6 @@ export default function PatientAppointmentsDialog({ patient, onClose }: Props) {
   const upcoming = appointments
     .filter((a) => a.startTime >= now && a.status !== "CANCELLED" && a.status !== "EXPIRED")
     .sort((a, b) => a.startTime - b.startTime);
-  const past = appointments
-    .filter((a) => a.startTime < now || a.status === "CANCELLED" || a.status === "EXPIRED")
-    .sort((a, b) => b.startTime - a.startTime);
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -66,11 +63,21 @@ export default function PatientAppointmentsDialog({ patient, onClose }: Props) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
-          {/* Patient info */}
+          {/* Patient contact info */}
           <div className="bg-gray-50 rounded-md p-3 mb-4">
-            <div className="text-sm text-gray-600">
-              {patient.email && <div>{patient.email}</div>}
-              {patient.phone && <div>{patient.phone}</div>}
+            <div className="text-sm text-gray-600 space-y-1">
+              {patient.email && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400 w-12">E-Mail</span>
+                  <span>{patient.email}</span>
+                </div>
+              )}
+              {patient.phone && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400 w-12">Telefon</span>
+                  <span>{patient.phone}</span>
+                </div>
+              )}
               {!patient.email && !patient.phone && (
                 <div className="text-gray-400">Keine Kontaktdaten</div>
               )}
@@ -79,35 +86,18 @@ export default function PatientAppointmentsDialog({ patient, onClose }: Props) {
 
           {loading ? (
             <div className="text-center py-8 text-gray-400 text-sm">Termine laden...</div>
-          ) : appointments.length === 0 ? (
-            <div className="text-center py-8 text-gray-400 text-sm">Keine Termine vorhanden</div>
+          ) : upcoming.length === 0 ? (
+            <div className="text-center py-8 text-gray-400 text-sm">Keine kommenden Termine</div>
           ) : (
-            <div className="space-y-4">
-              {upcoming.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                    Kommende ({upcoming.length})
-                  </h3>
-                  <div className="space-y-1">
-                    {upcoming.map((a) => (
-                      <AppointmentRow key={a.id} appointment={a} />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {past.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                    Vergangene ({past.length})
-                  </h3>
-                  <div className="space-y-1">
-                    {past.map((a) => (
-                      <AppointmentRow key={a.id} appointment={a} />
-                    ))}
-                  </div>
-                </div>
-              )}
+            <div>
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                Kommende Termine ({upcoming.length})
+              </h3>
+              <div className="space-y-1">
+                {upcoming.map((a) => (
+                  <AppointmentRow key={a.id} appointment={a} />
+                ))}
+              </div>
             </div>
           )}
         </div>
