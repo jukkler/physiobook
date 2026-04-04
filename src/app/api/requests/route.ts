@@ -4,6 +4,7 @@ import { escapeHtml } from "@/lib/html";
 import { isValidEmail, isValidDuration } from "@/lib/validation";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { corsHeaders, handlePreflight } from "@/lib/cors";
+import { syncPatient } from "@/lib/patients";
 
 // OPTIONS /api/requests (CORS preflight)
 export async function OPTIONS(req: Request) {
@@ -122,10 +123,11 @@ export async function POST(req: Request) {
 
     // INSERT with REQUESTED status
     const sanitizedMessage = message?.trim().replace(/[\r\n]+/g, " ") || null;
+    const patientId = syncPatient(patientName, contactEmail, contactPhone || null, now);
     db.prepare(
-      `INSERT INTO appointments (id, patient_name, start_time, end_time, duration_minutes, status, series_id, contact_email, contact_phone, notes, flagged_notes, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'REQUESTED', NULL, ?, ?, ?, 0, ?, ?)`
-    ).run(id, patientName, slotStartMs, endTimeMs, durationMinutes, contactEmail, contactPhone || null, sanitizedMessage, now, now);
+      `INSERT INTO appointments (id, patient_name, patient_id, start_time, end_time, duration_minutes, status, series_id, notes, flagged_notes, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'REQUESTED', NULL, ?, 0, ?, ?)`
+    ).run(id, patientName, patientId, slotStartMs, endTimeMs, durationMinutes, sanitizedMessage, now, now);
 
     // Queue notification email to admin
     const adminEmailSetting = db
