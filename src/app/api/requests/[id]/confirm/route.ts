@@ -13,7 +13,12 @@ export const POST = withApiAuth(async (req, ctx) => {
   const db = getDb();
 
   const appointment = db
-    .prepare("SELECT * FROM appointments WHERE id = ?")
+    .prepare(
+      `SELECT a.*, p.email as contact_email, p.phone as contact_phone
+       FROM appointments a
+       LEFT JOIN patients p ON p.id = a.patient_id
+       WHERE a.id = ?`
+    )
     .get(id) as Record<string, unknown> | undefined;
 
   if (!appointment) {

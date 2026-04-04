@@ -5,11 +5,12 @@ export const GET = withApiAuth(async () => {
   const db = getDb();
   const rows = db
     .prepare(
-      `SELECT id, patient_name, contact_email, contact_phone,
-              start_time, end_time, duration_minutes, notes, created_at
-       FROM appointments
-       WHERE status = 'REQUESTED'
-       ORDER BY created_at DESC`
+      `SELECT a.id, a.patient_name, p.email as contact_email, p.phone as contact_phone,
+              a.start_time, a.end_time, a.duration_minutes, a.notes, a.created_at
+       FROM appointments a
+       LEFT JOIN patients p ON p.id = a.patient_id
+       WHERE a.status = 'REQUESTED'
+       ORDER BY a.created_at DESC`
     )
     .all() as Array<{
     id: string;
