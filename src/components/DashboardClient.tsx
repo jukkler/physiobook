@@ -352,6 +352,7 @@ export default function DashboardClient() {
         <PatientAppointmentsDialog
           patient={selectedSearchPatient}
           onClose={() => setSelectedSearchPatient(null)}
+          onGoToDate={(d) => { setDate(d); setView("day"); }}
         />
       )}
 

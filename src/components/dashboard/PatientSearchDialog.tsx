@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { formatBerlinDate, formatBerlinTime } from "@/lib/time";
+import { formatBerlinDate, formatBerlinTime, epochToDateInput } from "@/lib/time";
 import { PRAXIS } from "@/lib/constants";
 
 interface Patient {
@@ -23,6 +23,7 @@ interface PatientAppointment {
 interface Props {
   patient: Patient;
   onClose: () => void;
+  onGoToDate: (date: string) => void;
 }
 
 const STATUS_LABEL: Record<string, { text: string; className: string }> = {
@@ -32,7 +33,7 @@ const STATUS_LABEL: Record<string, { text: string; className: string }> = {
   EXPIRED: { text: "Abgelaufen", className: "bg-gray-100 text-gray-400" },
 };
 
-export default function PatientAppointmentsDialog({ patient, onClose }: Props) {
+export default function PatientAppointmentsDialog({ patient, onClose, onGoToDate }: Props) {
   const [appointments, setAppointments] = useState<PatientAppointment[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -144,7 +145,7 @@ export default function PatientAppointmentsDialog({ patient, onClose }: Props) {
               </h3>
               <div className="space-y-1">
                 {upcoming.map((a) => (
-                  <AppointmentRow key={a.id} appointment={a} />
+                  <AppointmentRow key={a.id} appointment={a} onGoToDate={onGoToDate} onClose={onClose} />
                 ))}
               </div>
             </div>
@@ -164,10 +165,13 @@ export default function PatientAppointmentsDialog({ patient, onClose }: Props) {
   );
 }
 
-function AppointmentRow({ appointment: a }: { appointment: PatientAppointment }) {
+function AppointmentRow({ appointment: a, onGoToDate, onClose }: { appointment: PatientAppointment; onGoToDate: (date: string) => void; onClose: () => void }) {
   const status = STATUS_LABEL[a.status] || STATUS_LABEL.CONFIRMED;
   return (
-    <div className="flex items-center gap-3 px-3 py-2 rounded-md bg-gray-50 text-sm">
+    <button
+      onClick={() => { onGoToDate(epochToDateInput(a.startTime)); onClose(); }}
+      className="flex items-center gap-3 px-3 py-2 rounded-md bg-gray-50 text-sm w-full text-left hover:bg-blue-50 transition-colors cursor-pointer"
+    >
       <div className="flex-1 min-w-0">
         <div className="font-medium text-gray-900">{formatBerlinDate(a.startTime)}</div>
         <div className="text-xs text-gray-500">
@@ -177,6 +181,6 @@ function AppointmentRow({ appointment: a }: { appointment: PatientAppointment })
       <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${status.className}`}>
         {status.text}
       </span>
-    </div>
+    </button>
   );
 }
