@@ -6,6 +6,7 @@ import type { ConflictDetail } from "@/lib/overlap";
 import { filterNotes } from "@/lib/notes-filter";
 import { isValidDuration } from "@/lib/validation";
 import { detectAndGroupSeries } from "@/lib/series-detect";
+import { syncPatient, updatePatientContact } from "@/lib/patients";
 
 // GET /api/appointments/[id]
 export const GET = withApiAuth(async (_req, ctx) => {
@@ -13,7 +14,12 @@ export const GET = withApiAuth(async (_req, ctx) => {
   const db = getDb();
 
   const appointment = db
-    .prepare("SELECT * FROM appointments WHERE id = ?")
+    .prepare(
+      `SELECT a.*, p.email as contact_email, p.phone as contact_phone
+       FROM appointments a
+       LEFT JOIN patients p ON p.id = a.patient_id
+       WHERE a.id = ?`
+    )
     .get(id);
 
   if (!appointment) {
@@ -97,15 +103,25 @@ export const PATCH = withApiAuth(async (req, ctx) => {
 
     const notesFilter = body.notes !== undefined ? filterNotes(body.notes) : { flagged: false };
 
+    // Resolve patient_id if name changed
+    let patientId = existing.patient_id as string | null;
+    if (body.patientName && body.patientName !== existing.patient_name) {
+      patientId = syncPatient(body.patientName, body.contactEmail, body.contactPhone, now);
+    }
+
+    // Update contact info on patient record
+    if (patientId && (body.contactEmail !== undefined || body.contactPhone !== undefined)) {
+      updatePatientContact(patientId, body.contactEmail, body.contactPhone, now);
+    }
+
     db.prepare(
       `UPDATE appointments SET
         patient_name = COALESCE(?, patient_name),
+        patient_id = COALESCE(?, patient_id),
         start_time = ?,
         end_time = ?,
         duration_minutes = ?,
         status = COALESCE(?, status),
-        contact_email = COALESCE(?, contact_email),
-        contact_phone = COALESCE(?, contact_phone),
         notes = CASE WHEN ? = 1 THEN ? ELSE notes END,
         flagged_notes = CASE WHEN ? = 1 THEN ? ELSE flagged_notes END,
         reminder_sent = CASE WHEN ? = 1 THEN 0 ELSE reminder_sent END,
@@ -113,10 +129,9 @@ export const PATCH = withApiAuth(async (req, ctx) => {
       WHERE id = ?`
     ).run(
       body.patientName || null,
+      patientId,
       newStart, newEnd, newDuration,
       body.status || null,
-      body.contactEmail ?? null,
-      body.contactPhone ?? null,
       body.notes !== undefined ? 1 : 0, body.notes ?? null,
       body.notes !== undefined ? 1 : 0, notesFilter.flagged ? 1 : 0,
       (body.startTime || body.durationMinutes) ? 1 : 0,
@@ -193,6 +208,14 @@ export const PATCH = withApiAuth(async (req, ctx) => {
       }
     }
 
+    let patientId = existing.patient_id as string | null;
+    if (body.patientName && body.patientName !== existing.patient_name) {
+      patientId = syncPatient(body.patientName, body.contactEmail, body.contactPhone, now);
+    }
+    if (patientId && (body.contactEmail !== undefined || body.contactPhone !== undefined)) {
+      updatePatientContact(patientId, body.contactEmail, body.contactPhone, now);
+    }
+
     const updateSeries = db.transaction(() => {
       // If time changed, shift all appointments by the same delta
       if (timeDelta !== 0) {
@@ -206,25 +229,23 @@ export const PATCH = withApiAuth(async (req, ctx) => {
         ).run(timeDelta, timeDelta, now, seriesId);
       }
 
-      // Update name, duration, contact fields
+      // Update name, duration on appointments
       // end_time must be updated in the same statement as duration_minutes
       // to satisfy CHECK constraint: (end_time - start_time) = duration_minutes * 60000
       db.prepare(
         `UPDATE appointments SET
           patient_name = COALESCE(?, patient_name),
+          patient_id = COALESCE(?, patient_id),
           duration_minutes = COALESCE(?, duration_minutes),
           end_time = CASE WHEN ? IS NOT NULL THEN start_time + ? * 60000 ELSE end_time END,
-          contact_email = COALESCE(?, contact_email),
-          contact_phone = COALESCE(?, contact_phone),
           updated_at = ?
         WHERE series_id = ?`
       ).run(
         body.patientName || null,
+        patientId,
         body.durationMinutes || null,
         body.durationMinutes || null,
         body.durationMinutes || null,
-        body.contactEmail ?? null,
-        body.contactPhone ?? null,
         now, seriesId
       );
     });
