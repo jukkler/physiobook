@@ -49,6 +49,36 @@ export default function VerwaltungClient() {
   const [emailList, setEmailList] = useState<string[]>([]);
   const [emailListLoading, setEmailListLoading] = useState(false);
 
+  // Calendar reset
+  const [resetConfirm, setResetConfirm] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetMessage, setResetMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  async function handleReset() {
+    setResetting(true);
+    setResetMessage(null);
+    try {
+      const res = await fetch("/api/admin/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setResetMessage({
+          type: "success",
+          text: `Gelöscht: ${data.deleted.appointments} Termine, ${data.deleted.blockers} Blocker, ${data.deleted.patients} Patienten, ${data.deleted.emails} E-Mails`,
+        });
+      } else {
+        setResetMessage({ type: "error", text: "Fehler beim Zurücksetzen" });
+      }
+    } catch {
+      setResetMessage({ type: "error", text: "Netzwerkfehler" });
+    } finally {
+      setResetting(false);
+      setResetConfirm(false);
+    }
+  }
+
   // PDF import
   const [pdfImporting, setPdfImporting] = useState(false);
   const [pdfMessage, setPdfMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -369,6 +399,43 @@ export default function VerwaltungClient() {
         onSave={handleReminderSave}
         onToggleEmailList={loadEmailList}
       />
+
+      {/* Kalender zurücksetzen */}
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <h3 className="text-sm font-semibold text-red-800 mb-2">Kalender zurücksetzen</h3>
+        <p className="text-xs text-red-600 mb-3">
+          Löscht alle Termine, Blocker, Patienten und E-Mails. Diese Aktion kann nicht rückgängig gemacht werden.
+        </p>
+        {resetMessage && (
+          <div className={`text-sm mb-3 p-2 rounded ${resetMessage.type === "success" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+            {resetMessage.text}
+          </div>
+        )}
+        {!resetConfirm ? (
+          <button
+            onClick={() => setResetConfirm(true)}
+            className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
+          >
+            Kalender zurücksetzen
+          </button>
+        ) : (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleReset}
+              disabled={resetting}
+              className="px-4 py-2 text-sm bg-red-800 text-white rounded-md hover:bg-red-900 disabled:opacity-50"
+            >
+              {resetting ? "Lösche..." : "Wirklich alles löschen?"}
+            </button>
+            <button
+              onClick={() => setResetConfirm(false)}
+              className="px-4 py-2 text-sm border rounded-md hover:bg-gray-50"
+            >
+              Abbrechen
+            </button>
+          </div>
+        )}
+      </div>
 
       <AutoArchivePanel
         autoArchive={autoArchive}
