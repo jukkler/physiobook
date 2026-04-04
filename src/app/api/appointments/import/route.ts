@@ -166,23 +166,23 @@ export const POST = withApiAuth(async (req) => {
 
   // Bulk insert in transaction
   const insertStmt = db.prepare(
-    `INSERT INTO appointments (id, patient_name, start_time, end_time, duration_minutes, status, series_id, contact_email, contact_phone, notes, flagged_notes, reminder_sent, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO appointments (id, patient_name, patient_id, start_time, end_time, duration_minutes, status, series_id, notes, flagged_notes, reminder_sent, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   const importAll = db.transaction(() => {
     for (const apt of appointments) {
       const endTime = apt.startTime + apt.durationMinutes * 60_000;
+      const patientId = syncPatient(apt.patientName, apt.contactEmail, apt.contactPhone, now);
       insertStmt.run(
         uuidv4(),
         apt.patientName,
+        patientId,
         apt.startTime,
         endTime,
         apt.durationMinutes,
         apt.status,
         null, // series_id
-        apt.contactEmail,
-        apt.contactPhone,
         apt.notes,
         0, // flagged_notes
         0, // reminder_sent
@@ -190,8 +190,6 @@ export const POST = withApiAuth(async (req) => {
         now
       );
       imported++;
-
-      syncPatient(apt.patientName, apt.contactEmail, apt.contactPhone, now);
     }
   });
 
