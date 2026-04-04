@@ -10,6 +10,7 @@ import BlockerForm from "./forms/BlockerForm";
 import BlockerDeleteModal from "./dashboard/BlockerDeleteModal";
 import BulkDeleteModal from "./dashboard/BulkDeleteModal";
 import FindSlotDialog from "./dashboard/FindSlotDialog";
+import PatientSearchDialog from "./dashboard/PatientSearchDialog";
 import RequestNotifier from "./RequestNotifier";
 import { getWeekMonday, addDays, berlinDayStartMs, getMonthName, todayBerlin } from "@/lib/time";
 import type { Appointment, AppointmentWithContact, Blocker } from "@/lib/db/schema";
@@ -67,6 +68,7 @@ export default function DashboardClient() {
   const [deleting, setDeleting] = useState(false);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [showFindSlot, setShowFindSlot] = useState(false);
+  const [showPatientSearch, setShowPatientSearch] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // Refresh key to force re-fetch in child components
@@ -231,6 +233,12 @@ export default function DashboardClient() {
             Termin finden
           </button>
           <button
+            onClick={() => setShowPatientSearch(true)}
+            className="px-3 py-1.5 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700"
+          >
+            Suche
+          </button>
+          <button
             onClick={() => setShowBlockerForm(true)}
             className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded-md hover:bg-gray-800"
           >
@@ -298,6 +306,10 @@ export default function DashboardClient() {
       </div>
 
       {/* Modals */}
+      {showPatientSearch && (
+        <PatientSearchDialog onClose={() => setShowPatientSearch(false)} />
+      )}
+
       {showFindSlot && (
         <FindSlotDialog
           onSelectSlot={(startTimeMs) => {
