@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import PatientAppointmentsDialog from "./dashboard/PatientSearchDialog";
 
 interface Patient {
   id: string;
@@ -33,6 +34,7 @@ export default function PatientenClient() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
 
   const loadPatients = useCallback(async (q?: string) => {
     try {
@@ -316,7 +318,12 @@ export default function PatientenClient() {
                   </tr>
                 ) : (
                   <tr key={p.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-2 text-gray-900">{p.name}</td>
+                    <td
+                      className="px-4 py-2 text-blue-600 hover:text-blue-800 cursor-pointer font-medium"
+                      onClick={() => setSelectedPatient(p)}
+                    >
+                      {p.name}
+                    </td>
                     <td className="px-4 py-2 text-gray-600">{p.email || "\u2014"}</td>
                     <td className="px-4 py-2 text-gray-600">{p.phone || "\u2014"}</td>
                     <td className="px-4 py-2">
@@ -342,6 +349,13 @@ export default function PatientenClient() {
           </table>
         )}
       </div>
+      {selectedPatient && (
+        <PatientAppointmentsDialog
+          patient={selectedPatient}
+          onClose={() => setSelectedPatient(null)}
+          onGoToDate={() => {}}
+        />
+      )}
     </div>
   );
 }
