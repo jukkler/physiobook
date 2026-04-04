@@ -1,7 +1,5 @@
-import { and, gte, lt, eq } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
-import { getDb, getOrmDb } from "@/lib/db";
-import { appointments } from "@/lib/db/schema";
+import { getDb } from "@/lib/db";
 import { isValidDuration } from "@/lib/validation";
 import { syncPatient } from "@/lib/patients";
 import { withApiAuth } from "@/lib/auth";
@@ -23,13 +21,15 @@ export const GET = withApiAuth(async (req) => {
     );
   }
 
-  const db = getOrmDb();
-  const results = await db
-    .select()
-    .from(appointments)
-    .where(and(lt(appointments.startTime, to), gte(appointments.endTime, from)));
+  const db = getDb();
+  const rows = db.prepare(
+    `SELECT a.*, p.email as contact_email, p.phone as contact_phone
+     FROM appointments a
+     LEFT JOIN patients p ON p.id = a.patient_id
+     WHERE a.start_time < ? AND a.end_time >= ?`
+  ).all(to, from);
 
-  return Response.json(results);
+  return Response.json(rows);
 });
 
 // POST /api/appointments
@@ -146,21 +146,20 @@ export const POST = withApiAuth(async (req) => {
       }
     }
 
+    const patientId = syncPatient(patientName, contactEmail, contactPhone, now);
     const created: string[] = [];
 
-    // All inserts in a single transaction
     const insertSeries = getDb().transaction(() => {
       for (const slot of slots) {
         const id = uuidv4();
         getDb()
           .prepare(
-            `INSERT INTO appointments (id, patient_name, start_time, end_time, duration_minutes, status, series_id, contact_email, contact_phone, notes, flagged_notes, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO appointments (id, patient_name, patient_id, start_time, end_time, duration_minutes, status, series_id, notes, flagged_notes, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
           .run(
-            id, patientName, slot.start, slot.end, durationMinutes,
+            id, patientName, patientId, slot.start, slot.end, durationMinutes,
             appointmentStatus, seriesId,
-            contactEmail || null, contactPhone || null,
             notes || null, notesResult.flagged ? 1 : 0,
             now, now
           );
@@ -169,7 +168,6 @@ export const POST = withApiAuth(async (req) => {
     });
     insertSeries();
 
-    syncPatient(patientName, contactEmail, contactPhone, now);
     return Response.json({ seriesId, created }, { status: 201 });
   }
 
@@ -184,21 +182,21 @@ export const POST = withApiAuth(async (req) => {
     }
   }
 
+  const patientId = syncPatient(patientName, contactEmail, contactPhone, now);
+
   const id = uuidv4();
   getDb()
     .prepare(
-      `INSERT INTO appointments (id, patient_name, start_time, end_time, duration_minutes, status, series_id, contact_email, contact_phone, notes, flagged_notes, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO appointments (id, patient_name, patient_id, start_time, end_time, duration_minutes, status, series_id, notes, flagged_notes, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
-      id, patientName, startTime, endTime, durationMinutes,
+      id, patientName, patientId, startTime, endTime, durationMinutes,
       appointmentStatus, null,
-      contactEmail || null, contactPhone || null,
       notes || null, notesResult.flagged ? 1 : 0,
       now, now
     );
 
-  syncPatient(patientName, contactEmail, contactPhone, now);
   detectAndGroupSeries(patientName);
   return Response.json({ id }, { status: 201 });
 });
