@@ -418,10 +418,10 @@ export default function DashboardClient() {
             placeholder="Patient suchen..."
             value={searchQuery}
             onChange={(e) => handleSearchInput(e.target.value)}
-            className="w-48 px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+            className="w-80 px-4 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
           />
           {showSearchDropdown && searchResults.length > 0 && (
-            <div className="absolute top-full right-0 mt-1 w-72 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
+            <div className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
               {searchResults.map((p) => (
                 <button
                   key={p.id}
