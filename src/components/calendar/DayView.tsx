@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { formatBerlinDate, berlinDayStartMs, dateTimeToEpoch } from "@/lib/time";
 import { computeOverlapColumns } from "@/lib/layout";
-import type { Appointment, Blocker, AppSettings as Settings } from "@/lib/db/schema";
+import type { Appointment, AppointmentWithContact, Blocker, AppSettings as Settings } from "@/lib/db/schema";
 import AppointmentCard from "./AppointmentCard";
 
 interface DayViewProps {
@@ -11,7 +11,7 @@ interface DayViewProps {
   columnMode: "split" | "single";
   onDateChange: (date: string) => void;
   onCreateAppointment: (startTimeMs: number) => void;
-  onEditAppointment: (appointment: Appointment) => void;
+  onEditAppointment: (appointment: AppointmentWithContact) => void;
   onBlockerClick: (blocker: Blocker) => void;
 }
 
@@ -23,7 +23,7 @@ export default function DayView({
   onEditAppointment,
   onBlockerClick,
 }: DayViewProps) {
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointments, setAppointments] = useState<AppointmentWithContact[]>([]);
   const [blockersList, setBlockers] = useState<Blocker[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);

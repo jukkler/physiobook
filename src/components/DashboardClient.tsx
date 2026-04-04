@@ -12,7 +12,7 @@ import BulkDeleteModal from "./dashboard/BulkDeleteModal";
 import FindSlotDialog from "./dashboard/FindSlotDialog";
 import RequestNotifier from "./RequestNotifier";
 import { getWeekMonday, addDays, berlinDayStartMs, getMonthName, todayBerlin } from "@/lib/time";
-import type { Appointment, Blocker } from "@/lib/db/schema";
+import type { Appointment, AppointmentWithContact, Blocker } from "@/lib/db/schema";
 
 type ViewMode = "day" | "week" | "month";
 
@@ -59,7 +59,7 @@ export default function DashboardClient() {
   // Form state
   const [showAppointmentForm, setShowAppointmentForm] = useState(false);
   const [showBlockerForm, setShowBlockerForm] = useState(false);
-  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+  const [editingAppointment, setEditingAppointment] = useState<AppointmentWithContact | null>(null);
   const [newAppointmentStartMs, setNewAppointmentStartMs] = useState<number | undefined>();
 
   const [deletingBlocker, setDeletingBlocker] = useState<Blocker | null>(null);
@@ -78,7 +78,7 @@ export default function DashboardClient() {
     setShowAppointmentForm(true);
   }
 
-  function handleEditAppointment(appointment: Appointment) {
+  function handleEditAppointment(appointment: AppointmentWithContact) {
     setEditingAppointment(appointment);
     setNewAppointmentStartMs(undefined);
     setShowAppointmentForm(true);

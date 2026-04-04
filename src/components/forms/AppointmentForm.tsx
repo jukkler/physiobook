@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { epochToDateInput, epochToTimeInput, dateTimeToEpoch, formatBerlinDate, formatBerlinTime } from "@/lib/time";
 import { PRAXIS } from "@/lib/constants";
-import type { Appointment } from "@/lib/db/schema";
+import type { Appointment, AppointmentWithContact } from "@/lib/db/schema";
 
 interface PatientSuggestion {
   id: string;
@@ -14,7 +14,7 @@ interface PatientSuggestion {
 
 interface AppointmentFormProps {
   /** If provided, we're editing; otherwise creating */
-  appointment?: Appointment;
+  appointment?: AppointmentWithContact;
   /** Pre-filled start time (epoch ms) for new appointments */
   defaultStartTime?: number;
   onSave: () => void;
@@ -34,6 +34,9 @@ export default function AppointmentForm({
   const initialTime = epochToTimeInput(initialStartMs);
 
   const [patientName, setPatientName] = useState(appointment?.patientName ?? "");
+  const [patientId, setPatientId] = useState<string | null>(
+    appointment?.patientId ?? null
+  );
   const [date, setDate] = useState(initialDate);
   const [time, setTime] = useState(initialTime);
   const [duration, setDuration] = useState(appointment?.durationMinutes ?? 30);
@@ -80,12 +83,14 @@ export default function AppointmentForm({
 
   function handleNameChange(value: string) {
     setPatientName(value);
+    setPatientId(null); // reset — new patient will be created on backend
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => fetchSuggestions(value), 300);
   }
 
   function selectSuggestion(p: PatientSuggestion) {
     setPatientName(p.name);
+    setPatientId(p.id);
     if (p.email) setContactEmail(p.email);
     if (p.phone) setContactPhone(p.phone);
     setShowSuggestions(false);
@@ -114,6 +119,7 @@ export default function AppointmentForm({
 
       const payload: Record<string, unknown> = {
         patientName,
+        patientId: patientId || undefined,
         startTime: startTimeMs,
         durationMinutes: duration,
         contactEmail: contactEmail || undefined,

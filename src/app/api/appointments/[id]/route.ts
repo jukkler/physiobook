@@ -13,18 +13,36 @@ export const GET = withApiAuth(async (_req, ctx) => {
   const { id } = await ctx.params;
   const db = getDb();
 
-  const appointment = db
+  const row = db
     .prepare(
       `SELECT a.*, p.email as contact_email, p.phone as contact_phone
        FROM appointments a
        LEFT JOIN patients p ON p.id = a.patient_id
        WHERE a.id = ?`
     )
-    .get(id);
+    .get(id) as Record<string, unknown> | undefined;
 
-  if (!appointment) {
+  if (!row) {
     return Response.json({ error: "Termin nicht gefunden" }, { status: 404 });
   }
+
+  const appointment = {
+    id: row.id,
+    patientName: row.patient_name,
+    patientId: row.patient_id,
+    startTime: row.start_time,
+    endTime: row.end_time,
+    durationMinutes: row.duration_minutes,
+    status: row.status,
+    seriesId: row.series_id,
+    notes: row.notes,
+    flaggedNotes: row.flagged_notes,
+    reminderSent: row.reminder_sent,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    contactEmail: row.contact_email,
+    contactPhone: row.contact_phone,
+  };
 
   return Response.json(appointment);
 });
