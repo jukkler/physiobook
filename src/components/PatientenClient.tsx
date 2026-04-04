@@ -181,8 +181,8 @@ export default function PatientenClient() {
   const checkedPatients = patients.filter((p) => checkedIds.has(p.id));
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3 sticky top-0 bg-gray-50 z-10 pb-3">
+    <div className="space-y-2">
+      <div className="flex items-center gap-3 sticky top-0 bg-gray-50 z-10 py-2">
         <input
           type="text"
           value={search}
