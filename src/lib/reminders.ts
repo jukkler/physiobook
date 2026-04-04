@@ -23,12 +23,13 @@ export function queueAppointmentReminders(): number {
   // Find appointments needing reminders
   const appointments = db
     .prepare(
-      `SELECT id, patient_name, start_time, duration_minutes, contact_email
-       FROM appointments
-       WHERE status = 'CONFIRMED'
-         AND start_time <= ? AND start_time > ?
-         AND contact_email IS NOT NULL AND contact_email != ''
-         AND reminder_sent = 0`
+      `SELECT a.id, a.patient_name, a.start_time, a.duration_minutes, p.email as contact_email
+       FROM appointments a
+       JOIN patients p ON p.id = a.patient_id
+       WHERE a.status = 'CONFIRMED'
+         AND a.start_time <= ? AND a.start_time > ?
+         AND p.email IS NOT NULL AND p.email != ''
+         AND a.reminder_sent = 0`
     )
     .all(in24h, now) as Array<{
     id: string;

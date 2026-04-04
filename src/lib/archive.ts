@@ -157,10 +157,12 @@ export async function generateArchivePdf(
 
   const appointments = db
     .prepare(
-      `SELECT id, patient_name, start_time, end_time, duration_minutes, status, contact_email, contact_phone, notes
-       FROM appointments
-       WHERE start_time < ? AND end_time >= ?
-       ORDER BY start_time`
+      `SELECT a.id, a.patient_name, a.start_time, a.end_time, a.duration_minutes, a.status,
+              p.email as contact_email, p.phone as contact_phone, a.notes
+       FROM appointments a
+       LEFT JOIN patients p ON p.id = a.patient_id
+       WHERE a.start_time < ? AND a.end_time >= ?
+       ORDER BY a.start_time`
     )
     .all(to, from) as AppointmentRow[];
 
