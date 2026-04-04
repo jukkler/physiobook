@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { formatBerlinDate, formatBerlinTime } from "@/lib/time";
+import { PRAXIS } from "@/lib/constants";
 
 interface Patient {
   id: string;
@@ -48,6 +49,54 @@ export default function PatientAppointmentsDialog({ patient, onClose }: Props) {
   const upcoming = appointments
     .filter((a) => a.startTime >= now && a.status !== "CANCELLED" && a.status !== "EXPIRED")
     .sort((a, b) => a.startTime - b.startTime);
+
+  function handlePrint() {
+    if (upcoming.length === 0) return;
+
+    const rows = upcoming.map((a) =>
+      `<tr>
+        <td style="padding:4px 12px 4px 0">${formatBerlinDate(a.startTime)}</td>
+        <td style="padding:4px 12px 4px 0">${formatBerlinTime(a.startTime)} – ${formatBerlinTime(a.endTime)}</td>
+        <td style="padding:4px 0">${a.durationMinutes} min</td>
+      </tr>`
+    ).join("");
+
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Termine ${patient.name}</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 40px; color: #111; }
+  .header { border-bottom: 2px solid #111; padding-bottom: 12px; margin-bottom: 24px; display: flex; align-items: center; gap: 12px; }
+  .header img { height: 48px; width: auto; }
+  .header-text h1 { margin: 0; font-size: 18px; }
+  .header-text p { margin: 4px 0 0; font-size: 13px; color: #555; }
+  h2 { font-size: 15px; margin: 0 0 16px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  tr:nth-child(even) { background: #f9f9f9; }
+  th { text-align: left; padding: 4px 12px 4px 0; border-bottom: 1px solid #ccc; font-size: 12px; color: #555; }
+  .footer { margin-top: 32px; font-size: 11px; color: #999; }
+</style></head><body>
+<div class="header">
+  <img src="/logo.svg" alt="Logo" />
+  <div class="header-text">
+    <h1>${PRAXIS.name}</h1>
+    <p>${PRAXIS.address} &middot; ${PRAXIS.phone}</p>
+  </div>
+</div>
+<h2>Terminübersicht für ${patient.name}</h2>
+<table>
+  <thead><tr><th>Datum</th><th>Uhrzeit</th><th>Dauer</th></tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<div class="footer">Gedruckt am ${formatBerlinDate(Date.now())}</div>
+<script>window.onload=()=>{window.print();window.onafterprint=()=>window.close();}</script>
+</body></html>`;
+
+    const win = window.open("", "_blank");
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+    }
+  }
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -99,6 +148,15 @@ export default function PatientAppointmentsDialog({ patient, onClose }: Props) {
                 ))}
               </div>
             </div>
+          )}
+
+          {!loading && upcoming.length > 0 && (
+            <button
+              onClick={handlePrint}
+              className="w-full mt-4 px-4 py-2 text-sm text-gray-600 border border-dashed rounded-md hover:bg-gray-50 hover:text-gray-900"
+            >
+              Termine drucken
+            </button>
           )}
         </div>
       </div>
