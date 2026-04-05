@@ -195,7 +195,6 @@ export default function PatientenClient() {
   function selectDuplicateGroup(group: Patient[]) {
     setCheckedIds(new Set(group.map((p) => p.id)));
     setShowDuplicates(false);
-    setShowMerge(true);
   }
 
   function toggleChecked(id: string) {
