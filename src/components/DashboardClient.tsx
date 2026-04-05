@@ -372,6 +372,10 @@ export default function DashboardClient() {
           defaultStartTime={newAppointmentStartMs}
           onSave={handleFormSave}
           onClose={handleFormClose}
+          onShowPatient={(p) => {
+            setShowAppointmentForm(false);
+            setSelectedSearchPatient(p);
+          }}
         />
       )}
 

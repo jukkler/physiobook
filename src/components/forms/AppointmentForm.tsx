@@ -19,6 +19,7 @@ interface AppointmentFormProps {
   defaultStartTime?: number;
   onSave: () => void;
   onClose: () => void;
+  onShowPatient?: (patient: { id: string; name: string; email: string | null; phone: string | null }) => void;
 }
 
 export default function AppointmentForm({
@@ -26,6 +27,7 @@ export default function AppointmentForm({
   defaultStartTime,
   onSave,
   onClose,
+  onShowPatient,
 }: AppointmentFormProps) {
   const isEdit = !!appointment;
 
@@ -560,11 +562,28 @@ export default function AppointmentForm({
           </div>
 
           {isEdit && (
-            <div className="pt-1">
+            <div className="pt-1 flex gap-2">
+              {onShowPatient && patientId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onShowPatient({
+                      id: patientId,
+                      name: patientName,
+                      email: contactEmail || null,
+                      phone: contactPhone || null,
+                    });
+                    onClose();
+                  }}
+                  className="flex-1 px-4 py-2 text-sm text-gray-600 border border-dashed rounded-md hover:bg-gray-50 hover:text-gray-900"
+                >
+                  Alle Termine
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handlePrint}
-                className="w-full px-4 py-2 text-sm text-gray-600 border border-dashed rounded-md hover:bg-gray-50 hover:text-gray-900"
+                className="flex-1 px-4 py-2 text-sm text-gray-600 border border-dashed rounded-md hover:bg-gray-50 hover:text-gray-900"
               >
                 Termine drucken
               </button>
