@@ -520,11 +520,11 @@ export default function AppointmentForm({
             </div>
           )}
 
-          <div className="flex items-center gap-2 pt-2">
+          <div className="grid grid-cols-3 gap-2 pt-2">
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50"
+              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50"
             >
               {saving ? "Speichern..." : isEdit ? "Speichern" : "Erstellen"}
             </button>
@@ -562,7 +562,7 @@ export default function AppointmentForm({
           </div>
 
           {isEdit && (
-            <div className="pt-1 flex gap-2">
+            <div className="grid grid-cols-2 gap-2 pt-1">
               {onShowPatient && patientId && (
                 <button
                   type="button"
@@ -575,7 +575,7 @@ export default function AppointmentForm({
                     });
                     onClose();
                   }}
-                  className="flex-1 px-4 py-2 text-sm text-gray-600 border border-dashed rounded-md hover:bg-gray-50 hover:text-gray-900"
+                  className="px-4 py-2 text-sm text-gray-600 border border-dashed rounded-md hover:bg-gray-50 hover:text-gray-900"
                 >
                   Alle Termine
                 </button>
@@ -583,7 +583,7 @@ export default function AppointmentForm({
               <button
                 type="button"
                 onClick={handlePrint}
-                className="flex-1 px-4 py-2 text-sm text-gray-600 border border-dashed rounded-md hover:bg-gray-50 hover:text-gray-900"
+                className="px-4 py-2 text-sm text-gray-600 border border-dashed rounded-md hover:bg-gray-50 hover:text-gray-900"
               >
                 Termine drucken
               </button>
