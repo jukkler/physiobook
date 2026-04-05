@@ -39,6 +39,11 @@ export default function PatientenClient() {
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [showMerge, setShowMerge] = useState(false);
 
+  // Duplicate suggestions
+  const [duplicateGroups, setDuplicateGroups] = useState<Patient[][]>([]);
+  const [loadingDuplicates, setLoadingDuplicates] = useState(false);
+  const [showDuplicates, setShowDuplicates] = useState(false);
+
   const loadPatients = useCallback(async (q?: string) => {
     try {
       const url = q ? `/api/patients?q=${encodeURIComponent(q)}` : "/api/patients";
@@ -170,6 +175,29 @@ export default function PatientenClient() {
     }
   }
 
+  async function loadDuplicates() {
+    if (showDuplicates) {
+      setShowDuplicates(false);
+      return;
+    }
+    setLoadingDuplicates(true);
+    try {
+      const res = await fetch("/api/patients/duplicates");
+      if (res.ok) {
+        const data = await res.json();
+        setDuplicateGroups(data.groups || []);
+        setShowDuplicates(true);
+      }
+    } catch { /* silent */ }
+    finally { setLoadingDuplicates(false); }
+  }
+
+  function selectDuplicateGroup(group: Patient[]) {
+    setCheckedIds(new Set(group.map((p) => p.id)));
+    setShowDuplicates(false);
+    setShowMerge(true);
+  }
+
   function toggleChecked(id: string) {
     setCheckedIds((prev) => {
       const next = new Set(prev);
@@ -207,6 +235,13 @@ export default function PatientenClient() {
         >
           {importing ? "Importiere..." : "CSV Import"}
         </button>
+        <button
+          onClick={loadDuplicates}
+          disabled={loadingDuplicates}
+          className="px-4 py-2 border text-sm font-medium rounded-md hover:bg-gray-50 transition-colors whitespace-nowrap disabled:opacity-50"
+        >
+          {loadingDuplicates ? "Suche..." : "Duplikate finden"}
+        </button>
         {checkedIds.size >= 2 && (
           <button
             onClick={() => setShowMerge(true)}
@@ -222,6 +257,38 @@ export default function PatientenClient() {
           Neuer Patient
         </button>
       </div>
+
+      {showDuplicates && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-amber-800">
+              Mögliche Duplikate ({duplicateGroups.length} Gruppen)
+            </h3>
+            <button onClick={() => setShowDuplicates(false)} className="text-amber-600 hover:text-amber-800 text-sm">
+              Schließen
+            </button>
+          </div>
+          {duplicateGroups.length === 0 ? (
+            <p className="text-sm text-amber-700">Keine Duplikate gefunden.</p>
+          ) : (
+            <div className="space-y-2">
+              {duplicateGroups.map((group, i) => (
+                <div key={i} className="flex items-center justify-between bg-white rounded-md px-3 py-2 border border-amber-100">
+                  <div className="text-sm text-gray-900">
+                    {group.map((p) => p.name).join(" / ")}
+                  </div>
+                  <button
+                    onClick={() => selectDuplicateGroup(group)}
+                    className="px-3 py-1 text-xs bg-amber-600 text-white rounded hover:bg-amber-700 whitespace-nowrap"
+                  >
+                    Zusammenlegen
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {message && (
         <div className={`text-sm px-3 py-2 rounded ${message.type === "success" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
