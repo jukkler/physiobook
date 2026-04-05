@@ -359,7 +359,11 @@ export default function PatientenClient() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {patients.map((p) =>
+              {[...patients].sort((a, b) => {
+                const aChecked = checkedIds.has(a.id) ? 0 : 1;
+                const bChecked = checkedIds.has(b.id) ? 0 : 1;
+                return aChecked - bChecked;
+              }).map((p) =>
                 editId === p.id ? (
                   <tr key={p.id} className="bg-blue-50">
                     <td className="px-4 py-2">
