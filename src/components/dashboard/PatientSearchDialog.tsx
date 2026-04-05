@@ -36,6 +36,7 @@ const STATUS_LABEL: Record<string, { text: string; className: string }> = {
 export default function PatientAppointmentsDialog({ patient, onClose, onGoToDate }: Props) {
   const [appointments, setAppointments] = useState<PatientAppointment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -50,6 +51,8 @@ export default function PatientAppointmentsDialog({ patient, onClose, onGoToDate
   const upcoming = appointments
     .filter((a) => a.startTime >= now && a.status !== "CANCELLED" && a.status !== "EXPIRED")
     .sort((a, b) => a.startTime - b.startTime);
+  const all = [...appointments].sort((a, b) => b.startTime - a.startTime);
+  const displayList = showAll ? all : upcoming;
 
   function handlePrint() {
     if (upcoming.length === 0) return;
@@ -136,28 +139,40 @@ export default function PatientAppointmentsDialog({ patient, onClose, onGoToDate
 
           {loading ? (
             <div className="text-center py-8 text-gray-400 text-sm">Termine laden...</div>
-          ) : upcoming.length === 0 ? (
-            <div className="text-center py-8 text-gray-400 text-sm">Keine kommenden Termine</div>
+          ) : displayList.length === 0 ? (
+            <div className="text-center py-8 text-gray-400 text-sm">
+              {showAll ? "Keine Termine vorhanden" : "Keine kommenden Termine"}
+            </div>
           ) : (
             <div>
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                Kommende Termine ({upcoming.length})
+                {showAll ? `Alle Termine (${all.length})` : `Kommende Termine (${upcoming.length})`}
               </h3>
               <div className="space-y-1">
-                {upcoming.map((a) => (
+                {displayList.map((a) => (
                   <AppointmentRow key={a.id} appointment={a} onGoToDate={onGoToDate} onClose={onClose} />
                 ))}
               </div>
             </div>
           )}
 
-          {!loading && upcoming.length > 0 && (
-            <button
-              onClick={handlePrint}
-              className="w-full mt-4 px-4 py-2 text-sm text-gray-600 border border-dashed rounded-md hover:bg-gray-50 hover:text-gray-900"
-            >
-              Termine drucken
-            </button>
+          {!loading && (
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => setShowAll(!showAll)}
+                className="flex-1 px-4 py-2 text-sm text-gray-600 border border-dashed rounded-md hover:bg-gray-50 hover:text-gray-900"
+              >
+                {showAll ? "Nur kommende" : `Alle Termine (${all.length})`}
+              </button>
+              {upcoming.length > 0 && (
+                <button
+                  onClick={handlePrint}
+                  className="flex-1 px-4 py-2 text-sm text-gray-600 border border-dashed rounded-md hover:bg-gray-50 hover:text-gray-900"
+                >
+                  Termine drucken
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
