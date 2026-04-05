@@ -33,19 +33,29 @@ export const PATCH = withApiAuth(async (req, ctx) => {
 
   const now = Date.now();
 
-  db.prepare(
-    `UPDATE patients SET
-      name = COALESCE(?, name),
-      email = CASE WHEN ? = 1 THEN ? ELSE email END,
-      phone = CASE WHEN ? = 1 THEN ? ELSE phone END,
-      updated_at = ?
-    WHERE id = ?`
-  ).run(
-    body.name?.trim() || null,
-    body.email !== undefined ? 1 : 0, body.email ?? null,
-    body.phone !== undefined ? 1 : 0, body.phone ?? null,
-    now, id
-  );
+  const updateAll = db.transaction(() => {
+    db.prepare(
+      `UPDATE patients SET
+        name = COALESCE(?, name),
+        email = CASE WHEN ? = 1 THEN ? ELSE email END,
+        phone = CASE WHEN ? = 1 THEN ? ELSE phone END,
+        updated_at = ?
+      WHERE id = ?`
+    ).run(
+      body.name?.trim() || null,
+      body.email !== undefined ? 1 : 0, body.email ?? null,
+      body.phone !== undefined ? 1 : 0, body.phone ?? null,
+      now, id
+    );
+
+    // Sync patient_name on appointments
+    if (body.name?.trim()) {
+      db.prepare(
+        `UPDATE appointments SET patient_name = ?, updated_at = ? WHERE patient_id = ?`
+      ).run(body.name.trim(), now, id);
+    }
+  });
+  updateAll();
 
   return Response.json({ ok: true });
 });
