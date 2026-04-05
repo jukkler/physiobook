@@ -52,7 +52,12 @@ export const POST = withApiAuth(async (req) => {
       `UPDATE patients SET name = ?, email = ?, phone = ?, updated_at = ? WHERE id = ?`
     ).run(name.trim(), email ?? null, phone ?? null, now, targetId);
 
-    // 2. Move all appointments from source patients to target
+    // 2. Update name on all target patient's existing appointments
+    db.prepare(
+      `UPDATE appointments SET patient_name = ?, updated_at = ? WHERE patient_id = ?`
+    ).run(name.trim(), now, targetId);
+
+    // 3. Move all appointments from source patients to target
     const moved = db.prepare(
       `UPDATE appointments SET patient_id = ?, patient_name = ?, updated_at = ? WHERE patient_id IN (${sourcePlaceholders})`
     ).run(targetId, name.trim(), now, ...sourceIds).changes;
