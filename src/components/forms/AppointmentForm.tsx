@@ -122,8 +122,8 @@ export default function AppointmentForm({
         patientId: patientId || undefined,
         startTime: startTimeMs,
         durationMinutes: duration,
-        contactEmail: contactEmail || undefined,
-        contactPhone: contactPhone || undefined,
+        contactEmail: contactEmail || null,
+        contactPhone: contactPhone || null,
         notes: notes || undefined,
         status,
       };
