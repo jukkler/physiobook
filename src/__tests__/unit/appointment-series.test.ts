@@ -122,5 +122,33 @@ describe("createAppointmentSeries", () => {
         updatePatientContact: () => undefined,
       }
     )).toThrow("Zeitkonflikt: 1 Konflikte gefunden");
+
+    const result = createAppointmentSeries(
+      {
+        patientName: "Ada Lovelace",
+        startTime: start,
+        durationMinutes: 30,
+        status: "CONFIRMED",
+        intervalWeeks: 2,
+        count: 3,
+        force: true,
+      },
+      {
+        db,
+        now: () => 1_800_000_000_000,
+        uuid: (() => {
+          const ids = ["series-forced", "appt-forced-1", "appt-forced-2", "appt-forced-3"];
+          return () => ids.shift()!;
+        })(),
+        syncPatient: () => "patient-1",
+        updatePatientContact: () => undefined,
+      }
+    );
+
+    expect(result).toEqual({
+      seriesId: "series-forced",
+      created: ["appt-forced-1", "appt-forced-2", "appt-forced-3"],
+    });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM appointments").get()).toEqual({ count: 4 });
   });
 });
