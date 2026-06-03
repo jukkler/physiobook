@@ -3,7 +3,10 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { epochToDateInput, epochToTimeInput, dateTimeToEpoch, formatBerlinDate, formatBerlinTime } from "@/lib/time";
 import { PRAXIS } from "@/lib/constants";
-import type { Appointment, AppointmentWithContact } from "@/lib/db/schema";
+import type { Appointment, AppointmentSeriesScope, AppointmentWithContact } from "@/lib/db/schema";
+import SeriesFields from "@/components/forms/SeriesFields";
+import SeriesScopeDialog from "@/components/forms/SeriesScopeDialog";
+import SeriesSummary from "@/components/forms/SeriesSummary";
 
 interface PatientSuggestion {
   id: string;
@@ -49,7 +52,7 @@ export default function AppointmentForm({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [editScope, setEditScope] = useState<"single" | "series">("single");
+  const [pendingScopeAction, setPendingScopeAction] = useState<"save" | "delete" | null>(null);
   const [showConflict, setShowConflict] = useState(false);
   const [conflictMessage, setConflictMessage] = useState("");
   const [conflictDetails, setConflictDetails] = useState<{ name: string; startTime: number; endTime: number; type: string }[]>([]);
@@ -111,33 +114,36 @@ export default function AppointmentForm({
     }
   }, [showSuggestions]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  function buildPayload() {
+    const startTimeMs = dateTimeToEpoch(date, time);
+    const payload: Record<string, unknown> = {
+      patientName,
+      patientId: patientId || undefined,
+      startTime: startTimeMs,
+      durationMinutes: duration,
+      contactEmail: contactEmail || null,
+      contactPhone: contactPhone || null,
+      notes: notes || undefined,
+      status,
+    };
+
+    if (!isEdit && isSeries) {
+      payload.series = {
+        count: isPermanent ? 52 : seriesCount,
+        intervalWeeks: seriesInterval,
+      };
+    }
+
+    return payload;
+  }
+
+  async function submitWithScope(scope: AppointmentSeriesScope | null) {
     setError("");
     setSaving(true);
-
     try {
-      const startTimeMs = dateTimeToEpoch(date, time);
-
-      const payload: Record<string, unknown> = {
-        patientName,
-        patientId: patientId || undefined,
-        startTime: startTimeMs,
-        durationMinutes: duration,
-        contactEmail: contactEmail || null,
-        contactPhone: contactPhone || null,
-        notes: notes || undefined,
-        status,
-      };
-
-      if (!isEdit && isSeries) {
-        const dayOfWeek = new Date(startTimeMs).getUTCDay();
-        const count = isPermanent ? 52 : seriesCount;
-        payload.series = { dayOfWeek, count, intervalWeeks: seriesInterval };
-      }
-
-      const scopeParam = isEdit && appointment.seriesId && editScope === "series" ? "?scope=series" : "";
-      const url = isEdit ? `/api/appointments/${appointment.id}${scopeParam}` : "/api/appointments";
+      const payload = buildPayload();
+      const scopeParam = isEdit && appointment?.seriesId && scope ? `?scope=${scope}` : "";
+      const url = isEdit ? `/api/appointments/${appointment!.id}${scopeParam}` : "/api/appointments";
       const method = isEdit ? "PATCH" : "POST";
 
       const res = await fetch(url, {
@@ -147,7 +153,6 @@ export default function AppointmentForm({
       });
 
       if (res.status === 409) {
-        // Conflict — ask user whether to force or cancel
         const data = await res.json();
         setConflictMessage(data.error || "Dieser Zeitraum ist bereits belegt.");
         setConflictDetails(data.conflictDetails || []);
@@ -170,7 +175,17 @@ export default function AppointmentForm({
     }
   }
 
-  async function handleDelete(scope: "single" | "series") {
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (isEdit && appointment?.seriesId) {
+      setPendingScopeAction("save");
+      return;
+    }
+
+    await submitWithScope(null);
+  }
+
+  async function handleDelete(scope: AppointmentSeriesScope) {
     setSaving(true);
     try {
       const res = await fetch(`/api/appointments/${appointment!.id}?scope=${scope}`, {
@@ -376,64 +391,18 @@ export default function AppointmentForm({
           </div>
 
           {!isEdit && (
-            <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isSeries}
-                  onChange={(e) => setIsSeries(e.target.checked)}
-                  className="rounded"
-                />
-                Serientermin (wiederholen)
-              </label>
-              {isSeries && (
-                <div className="mt-2 space-y-2">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Intervall
-                    </label>
-                    <select
-                      value={seriesInterval}
-                      onChange={(e) => setSeriesInterval(Number(e.target.value))}
-                      className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value={1}>Wöchentlich</option>
-                      <option value={2}>Alle 2 Wochen</option>
-                      <option value={3}>Alle 3 Wochen</option>
-                      <option value={4}>Alle 4 Wochen</option>
-                    </select>
-                  </div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isPermanent}
-                      onChange={(e) => setIsPermanent(e.target.checked)}
-                      className="rounded"
-                    />
-                    Dauerpatient
-                  </label>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Anzahl Termine
-                    </label>
-                    <input
-                      type="number"
-                      min={2}
-                      max={52}
-                      value={isPermanent ? 52 : seriesCount}
-                      onChange={(e) => setSeriesCount(Math.max(2, Math.min(52, Number(e.target.value))))}
-                      disabled={isPermanent}
-                      className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isPermanent ? "bg-gray-100 text-gray-400 cursor-not-allowed" : ""}`}
-                    />
-                  </div>
-                  <p className="text-xs text-gray-400">
-                    {isPermanent
-                      ? `Erstellt 52 Termine ${seriesInterval === 1 ? "im wöchentlichen Abstand" : `alle ${seriesInterval} Wochen`} (1 Jahr)`
-                      : `Erstellt ${seriesCount} Termine ${seriesInterval === 1 ? "im wöchentlichen Abstand" : `alle ${seriesInterval} Wochen`}`}
-                  </p>
-                </div>
-              )}
-            </div>
+            <SeriesFields
+              enabled={isSeries}
+              onEnabledChange={setIsSeries}
+              intervalWeeks={seriesInterval}
+              onIntervalWeeksChange={setSeriesInterval}
+              count={seriesCount}
+              onCountChange={setSeriesCount}
+              permanent={isPermanent}
+              onPermanentChange={setIsPermanent}
+              startTime={dateTimeToEpoch(date, time)}
+              durationMinutes={duration}
+            />
           )}
 
           {isEdit && (
@@ -494,30 +463,8 @@ export default function AppointmentForm({
             <span className="text-xs text-gray-400">{notes.length}/200</span>
           </div>
 
-          {isEdit && appointment.seriesId && (
-            <div className="bg-gray-50 rounded p-3 space-y-2">
-              <p className="text-xs text-gray-500">Dieser Termin gehört zu einer Serie.</p>
-              <div className="space-y-1">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    name="editScope"
-                    checked={editScope === "single"}
-                    onChange={() => setEditScope("single")}
-                  />
-                  <span className="text-gray-700">Nur diesen Termin ändern</span>
-                </label>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    name="editScope"
-                    checked={editScope === "series"}
-                    onChange={() => setEditScope("series")}
-                  />
-                  <span className="text-gray-700">Alle Termine der Serie ändern</span>
-                </label>
-              </div>
-            </div>
+          {isEdit && appointment.seriesSummary && (
+            <SeriesSummary summary={appointment.seriesSummary} />
           )}
 
           <div className="grid grid-cols-3 gap-2 pt-2">
@@ -542,8 +489,11 @@ export default function AppointmentForm({
                 <button
                   type="button"
                   onClick={() => {
-                    const scope = appointment?.seriesId ? editScope : "single";
-                    handleDelete(scope);
+                    if (appointment?.seriesId) {
+                      setPendingScopeAction("delete");
+                    } else {
+                      handleDelete("single");
+                    }
                   }}
                   disabled={saving}
                   className="px-4 py-2 bg-red-800 text-white text-sm font-medium rounded-md hover:bg-red-900 disabled:opacity-50"
@@ -591,6 +541,26 @@ export default function AppointmentForm({
           )}
         </form>
       </div>
+
+      {pendingScopeAction && (
+        <SeriesScopeDialog
+          mode={pendingScopeAction}
+          saving={saving}
+          onCancel={() => {
+            setPendingScopeAction(null);
+            setShowDeleteConfirm(false);
+          }}
+          onChoose={(scope) => {
+            const action = pendingScopeAction;
+            setPendingScopeAction(null);
+            if (action === "delete") {
+              handleDelete(scope);
+            } else {
+              submitWithScope(scope);
+            }
+          }}
+        />
+      )}
 
       {showConflict && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
