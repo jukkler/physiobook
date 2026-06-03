@@ -26,6 +26,9 @@ interface AppointmentFormProps {
   onShowPatient?: (patient: { id: string; name: string; email: string | null; phone: string | null }) => void;
 }
 
+const EMAIL_SUBJECT_MAX_LENGTH = 120;
+const EMAIL_BODY_MAX_LENGTH = 2000;
+
 export default function AppointmentForm({
   appointment,
   defaultStartTime,
@@ -54,6 +57,9 @@ export default function AppointmentForm({
   const [saving, setSaving] = useState(false);
   const [emailSending, setEmailSending] = useState(false);
   const [emailMessage, setEmailMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [showEmailComposer, setShowEmailComposer] = useState(false);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [pendingScopeAction, setPendingScopeAction] = useState<"save" | "delete" | null>(null);
   const [showConflict, setShowConflict] = useState(false);
@@ -139,6 +145,37 @@ export default function AppointmentForm({
     }
 
     return payload;
+  }
+
+  function buildDefaultEmailSubject() {
+    return `Ihr Termin am ${formatBerlinDate(dateTimeToEpoch(date, time))}`;
+  }
+
+  function buildDefaultEmailBody() {
+    const startTimeMs = dateTimeToEpoch(date, time);
+    const endTimeMs = startTimeMs + duration * 60_000;
+    const notesLine = notes.trim() ? `\nHinweis: ${notes.trim()}` : "";
+
+    return `Hallo ${patientName},
+
+hiermit senden wir Ihnen Ihre Termininformation:
+
+${formatBerlinDate(startTimeMs)}
+${formatBerlinTime(startTimeMs)} - ${formatBerlinTime(endTimeMs)} Uhr
+${duration} Minuten${notesLine}
+
+Falls Sie den Termin nicht wahrnehmen können, melden Sie sich bitte rechtzeitig in der Praxis.
+
+Viele Grüße
+${PRAXIS.name}`;
+  }
+
+  function openEmailComposer() {
+    setEmailMessage(null);
+    setError("");
+    setEmailSubject((current) => current || buildDefaultEmailSubject());
+    setEmailBody((current) => current || buildDefaultEmailBody());
+    setShowEmailComposer(true);
   }
 
   async function submitWithScope(scope: AppointmentSeriesScope | null) {
@@ -298,6 +335,16 @@ export default function AppointmentForm({
   async function handleSendAppointmentEmail() {
     if (!appointment) return;
 
+    const subject = emailSubject.trim();
+    const message = emailBody.trim();
+    if (!subject || !message) {
+      setEmailMessage({
+        type: "error",
+        text: "Bitte Betreff und Nachricht ausfüllen.",
+      });
+      return;
+    }
+
     setEmailSending(true);
     setEmailMessage(null);
     setError("");
@@ -305,6 +352,8 @@ export default function AppointmentForm({
     try {
       const res = await fetch(`/api/appointments/${appointment.id}/email`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject, message }),
       });
       const data = await res.json().catch(() => ({} as { error?: string; to?: string }));
 
@@ -320,6 +369,7 @@ export default function AppointmentForm({
         type: "success",
         text: `E-Mail wurde an ${data.to} gesendet.`,
       });
+      setShowEmailComposer(false);
     } catch {
       setEmailMessage({
         type: "error",
@@ -583,12 +633,12 @@ export default function AppointmentForm({
               )}
               <button
                 type="button"
-                onClick={handleSendAppointmentEmail}
-                disabled={emailSending || !canSendEmail}
-                title={!contactEmail ? "Keine E-Mail-Adresse hinterlegt" : !isValidEmail(contactEmail) ? "Keine gültige E-Mail-Adresse hinterlegt" : "Termin per E-Mail an Patienten senden"}
+                onClick={openEmailComposer}
+                disabled={!canSendEmail}
+                title={!contactEmail ? "Keine E-Mail-Adresse hinterlegt" : !isValidEmail(contactEmail) ? "Keine gültige E-Mail-Adresse hinterlegt" : "Eigene E-Mail an Patienten schreiben"}
                 className="px-4 py-2 text-sm text-gray-700 border border-dashed border-gray-400 rounded-md hover:bg-gray-50 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {emailSending ? "Senden..." : "E-Mail senden"}
+                E-Mail schreiben
               </button>
               <button
                 type="button"
@@ -597,6 +647,63 @@ export default function AppointmentForm({
               >
                 Termine drucken
               </button>
+            </div>
+          )}
+
+          {isEdit && showEmailComposer && (
+            <div className="rounded-md border border-blue-200 bg-blue-50/70 p-3 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-800 mb-1">
+                  Betreff
+                </label>
+                <input
+                  type="text"
+                  value={emailSubject}
+                  maxLength={EMAIL_SUBJECT_MAX_LENGTH}
+                  onChange={(e) => setEmailSubject(e.target.value.slice(0, EMAIL_SUBJECT_MAX_LENGTH))}
+                  className="w-full px-3 py-2 border border-blue-200 bg-white rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Betreff der E-Mail"
+                />
+                <div className="text-xs text-gray-500 mt-1">
+                  {emailSubject.length}/{EMAIL_SUBJECT_MAX_LENGTH}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-800 mb-1">
+                  Nachricht
+                </label>
+                <textarea
+                  value={emailBody}
+                  maxLength={EMAIL_BODY_MAX_LENGTH}
+                  onChange={(e) => setEmailBody(e.target.value.slice(0, EMAIL_BODY_MAX_LENGTH))}
+                  rows={8}
+                  className="w-full px-3 py-2 border border-blue-200 bg-white rounded-md text-sm leading-5 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+                  placeholder="Nachricht an den Patienten"
+                />
+                <div className="text-xs text-gray-500 mt-1">
+                  {emailBody.length}/{EMAIL_BODY_MAX_LENGTH}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSendAppointmentEmail}
+                  disabled={emailSending || !canSendEmail || !emailSubject.trim() || !emailBody.trim()}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {emailSending ? "Senden..." : "E-Mail senden"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowEmailComposer(false)}
+                  disabled={emailSending}
+                  className="px-4 py-2 border border-gray-400 bg-white text-gray-800 text-sm font-medium rounded-md hover:bg-gray-100 disabled:opacity-50"
+                >
+                  Schließen
+                </button>
+              </div>
             </div>
           )}
         </form>

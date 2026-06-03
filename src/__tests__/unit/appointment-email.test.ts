@@ -44,7 +44,7 @@ describe("sendAppointmentEmail", () => {
     send.mockResolvedValue({ ok: true });
   });
 
-  it("sends appointment details to the linked patient email", async () => {
+  it("sends the custom message to the linked patient email", async () => {
     db.prepare(
       "INSERT INTO patients (id, name, email, phone, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
     ).run("patient-1", "Dunkel", "patient@example.de", "0170", 1, 1);
@@ -58,6 +58,8 @@ describe("sendAppointmentEmail", () => {
     const result = await sendAppointmentEmail({
       db,
       appointmentId: "appt-1",
+      subject: "Termin verschoben",
+      message: "Hallo Dunkel,\n\nIhr Termin ist bestätigt.\nBitte <antworten>.",
       sendHtmlEmail: send,
       now: () => 123,
     });
@@ -65,18 +67,17 @@ describe("sendAppointmentEmail", () => {
     expect(result).toEqual({ ok: true, to: "patient@example.de" });
     expect(send).toHaveBeenCalledTimes(1);
     expect(send.mock.calls[0][0]).toBe("patient@example.de");
-    expect(send.mock.calls[0][1]).toBe("Ihr Termin in der Praxis");
-    expect(send.mock.calls[0][2]).toContain("Hallo Dunkel");
-    expect(send.mock.calls[0][2]).toContain("Mi., 03.06.2026");
-    expect(send.mock.calls[0][2]).toContain("08:00");
-    expect(send.mock.calls[0][2]).toContain("30 Minuten");
-    expect(send.mock.calls[0][2]).toContain("KG &lt;test&gt;");
+    expect(send.mock.calls[0][1]).toBe("Termin verschoben");
+    expect(send.mock.calls[0][2]).toContain("<p>Hallo Dunkel,</p>");
+    expect(send.mock.calls[0][2]).toContain("<p>Ihr Termin ist bestätigt.<br>Bitte &lt;antworten&gt;.</p>");
   });
 
   it("returns 404 when appointment is missing", async () => {
     const result = await sendAppointmentEmail({
       db,
       appointmentId: "missing",
+      subject: "Termin",
+      message: "Nachricht",
       sendHtmlEmail: send,
       now: () => 123,
     });
@@ -99,6 +100,8 @@ describe("sendAppointmentEmail", () => {
     const result = await sendAppointmentEmail({
       db,
       appointmentId: "appt-1",
+      subject: "Termin",
+      message: "Nachricht",
       sendHtmlEmail: send,
       now: () => 123,
     });
@@ -121,11 +124,39 @@ describe("sendAppointmentEmail", () => {
     const result = await sendAppointmentEmail({
       db,
       appointmentId: "appt-1",
+      subject: "Termin",
+      message: "Nachricht",
       sendHtmlEmail: send,
       now: () => 123,
     });
 
     expect(result).toEqual({ ok: false, status: 400, error: "Für diesen Patienten ist keine gültige E-Mail-Adresse hinterlegt" });
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when custom content is missing", async () => {
+    const result = await sendAppointmentEmail({
+      db,
+      appointmentId: "appt-1",
+      sendHtmlEmail: send,
+      now: () => 123,
+    });
+
+    expect(result).toEqual({ ok: false, status: 400, error: "Betreff und Nachricht sind erforderlich" });
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when custom content is blank", async () => {
+    const result = await sendAppointmentEmail({
+      db,
+      appointmentId: "appt-1",
+      subject: " ",
+      message: "\n",
+      sendHtmlEmail: send,
+      now: () => 123,
+    });
+
+    expect(result).toEqual({ ok: false, status: 400, error: "Betreff und Nachricht dürfen nicht leer sein" });
     expect(send).not.toHaveBeenCalled();
   });
 });

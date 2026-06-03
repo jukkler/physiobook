@@ -1,6 +1,5 @@
 import type Database from "better-sqlite3";
 import { escapeHtml } from "@/lib/html";
-import { formatBerlinDate, formatBerlinTime } from "@/lib/time";
 import { sendHtmlEmail as defaultSendHtmlEmail } from "@/lib/email";
 import { isValidEmail } from "@/lib/validation";
 
@@ -13,6 +12,8 @@ type SendHtmlEmail = (
 interface SendAppointmentEmailDeps {
   db: Database.Database;
   appointmentId: string;
+  subject?: unknown;
+  message?: unknown;
   sendHtmlEmail?: SendHtmlEmail;
   now?: () => number;
 }
@@ -24,43 +25,61 @@ type SendAppointmentEmailResult =
 interface AppointmentEmailRow {
   id: string;
   patient_name: string;
-  start_time: number;
-  end_time: number;
-  duration_minutes: number;
-  status: string;
-  notes: string | null;
   contact_email: string | null;
 }
 
-function buildAppointmentEmailHtml(row: AppointmentEmailRow): string {
-  const date = formatBerlinDate(row.start_time);
-  const start = formatBerlinTime(row.start_time);
-  const end = formatBerlinTime(row.end_time);
-  const notes = row.notes?.trim()
-    ? `<p><strong>Hinweis:</strong> ${escapeHtml(row.notes.trim())}</p>`
-    : "";
+function plainTextToHtml(text: string): string {
+  return text
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`)
+    .join("\n");
+}
 
-  return `<p>Hallo ${escapeHtml(row.patient_name)},</p>
-<p>hiermit senden wir Ihnen Ihre Termininformation:</p>
-<p><strong>${date}</strong><br>${start} - ${end} Uhr<br>${row.duration_minutes} Minuten</p>
-${notes}
-<p>Falls Sie den Termin nicht wahrnehmen k&ouml;nnen, melden Sie sich bitte rechtzeitig in der Praxis.</p>`;
+function parseEmailContent(subject: unknown, message: unknown) {
+  if (typeof subject !== "string" || typeof message !== "string") {
+    return { ok: false as const, error: "Betreff und Nachricht sind erforderlich" };
+  }
+
+  const trimmedSubject = subject.trim();
+  const trimmedMessage = message.trim();
+
+  if (!trimmedSubject || !trimmedMessage) {
+    return { ok: false as const, error: "Betreff und Nachricht dürfen nicht leer sein" };
+  }
+
+  if (trimmedSubject.length > 120) {
+    return { ok: false as const, error: "Der Betreff darf maximal 120 Zeichen lang sein" };
+  }
+
+  if (trimmedMessage.length > 2000) {
+    return { ok: false as const, error: "Die Nachricht darf maximal 2000 Zeichen lang sein" };
+  }
+
+  return {
+    ok: true as const,
+    subject: trimmedSubject,
+    html: plainTextToHtml(trimmedMessage),
+  };
 }
 
 export async function sendAppointmentEmail({
   db,
   appointmentId,
+  subject,
+  message,
   sendHtmlEmail = defaultSendHtmlEmail,
 }: SendAppointmentEmailDeps): Promise<SendAppointmentEmailResult> {
+  const content = parseEmailContent(subject, message);
+  if (!content.ok) {
+    return { ok: false, status: 400, error: content.error };
+  }
+
   const row = db
     .prepare(
       `SELECT a.id,
               a.patient_name,
-              a.start_time,
-              a.end_time,
-              a.duration_minutes,
-              a.status,
-              a.notes,
               p.email as contact_email
        FROM appointments a
        LEFT JOIN patients p ON p.id = a.patient_id
@@ -82,8 +101,8 @@ export async function sendAppointmentEmail({
 
   const result = await sendHtmlEmail(
     row.contact_email,
-    "Ihr Termin in der Praxis",
-    buildAppointmentEmailHtml(row)
+    content.subject,
+    content.html
   );
 
   if (!result.ok) {
