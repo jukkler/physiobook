@@ -570,7 +570,7 @@ export default function AppointmentForm({
             </div>
             <div className="p-4 space-y-3">
               <p className="text-sm text-gray-700">
-                {conflictMessage || "Dieser Zeitraum ist bereits belegt."} Trotzdem speichern?
+                {conflictMessage || "Ein oder mehrere Termine überschneiden sich."} Du kannst abbrechen oder trotzdem speichern.
               </p>
               {conflictDetails.length > 0 && (
                 <div className="max-h-40 overflow-y-auto space-y-1">
@@ -583,7 +583,7 @@ export default function AppointmentForm({
                     </div>
                   ))}
                   {conflictDetails.length > 10 && (
-                    <p className="text-xs text-gray-500">+ {conflictDetails.length - 10} weitere Konflikte</p>
+                    <p className="text-xs text-gray-500">+ {conflictDetails.length - 10} weitere Konflikte in dieser Serie</p>
                   )}
                 </div>
               )}
