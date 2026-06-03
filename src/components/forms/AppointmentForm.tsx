@@ -505,7 +505,7 @@ export default function AppointmentForm({
             <button
               type="button"
               onClick={() => { onClose(); setShowDeleteConfirm(false); }}
-              className="px-4 py-2 border text-sm rounded-md hover:bg-gray-50"
+              className="px-4 py-2 border border-gray-400 bg-white text-gray-800 text-sm font-medium rounded-md hover:bg-gray-100 hover:border-gray-500 disabled:opacity-50"
             >
               Abbrechen
             </button>
