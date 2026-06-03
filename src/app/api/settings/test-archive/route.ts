@@ -1,7 +1,9 @@
 import { withApiAuth } from "@/lib/auth";
 import { checkCsrf } from "@/lib/csrf";
+import { getDb } from "@/lib/db";
 import { generateArchivePdf } from "@/lib/archive";
 import { sendEmailWithAttachment } from "@/lib/email";
+import { renderArchiveEmail } from "@/lib/email-templates";
 
 export const POST = withApiAuth(async (req) => {
   const csrf = checkCsrf(req);
@@ -36,11 +38,16 @@ export const POST = withApiAuth(async (req) => {
   };
 
   const { buffer, filename, title } = await generateArchivePdf(type as "week" | "month" | "year", dateStr);
+  const rendered = renderArchiveEmail(getDb(), {
+    ArchivTyp: `${archiveLabels[type]} (Testversand)`,
+    ArchivTitel: title,
+    ArchivDatum: dateStr,
+  });
 
   const result = await sendEmailWithAttachment(
     to,
-    title,
-    `<p>Im Anhang finden Sie das ${archiveLabels[type]} (Testversand).</p>`,
+    rendered.subject,
+    rendered.html,
     { filename, content: buffer }
   );
 

@@ -1,35 +1,35 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { verifySessionFromCookies } from "@/lib/auth";
-import PatientenClient from "@/components/PatientenClient";
+import EmailSettingsClient from "@/components/EmailSettingsClient";
 import UserMenu from "@/components/UserMenu";
 
-export default async function PatientenPage() {
+export default async function EmailEinstellungenPage() {
   const session = await verifySessionFromCookies();
   if (!session) redirect("/login");
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-gray-50">
       <header className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/dashboard"><img src="/logo.svg" alt="Therapiezentrum Ziesemer" className="h-8" /></Link>
-            <h1 className="text-xl font-bold text-gray-900">Patienten</h1>
+            <h1 className="text-xl font-bold text-gray-900">E-Mail Einstellungen</h1>
           </div>
           <div className="flex items-center gap-4">
             <UserMenu
               username={session.username}
               navItems={[
                 { label: "Kalender", href: "/dashboard" },
+                { label: "Patienten", href: "/patienten" },
                 { label: "Verwaltung", href: "/verwaltung" },
-                { label: "E-Mail Einstellungen", href: "/email-einstellungen" },
               ]}
             />
           </div>
         </div>
       </header>
-      <main className="max-w-7xl mx-auto px-4 pt-0 pb-4 flex-1 w-full overflow-auto">
-        <PatientenClient />
+      <main className="max-w-7xl mx-auto px-4 py-6 flex-1 w-full">
+        <EmailSettingsClient />
       </main>
     </div>
   );

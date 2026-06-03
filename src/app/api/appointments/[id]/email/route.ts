@@ -9,9 +9,12 @@ export const POST = withApiAuth(async (req, ctx) => {
   if (!csrf.ok) return Response.json({ error: csrf.error }, { status: 403 });
 
   const { id } = await ctx.params;
+  const body = await req.json().catch(() => ({}));
   const result = await sendAppointmentEmail({
     db: getDb(),
     appointmentId: id,
+    subject: body.subject,
+    message: body.message,
   });
 
   if (!result.ok) {

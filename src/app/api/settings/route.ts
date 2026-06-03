@@ -3,6 +3,8 @@ import { settings } from "@/lib/db/schema";
 import { withApiAuth } from "@/lib/auth";
 import { checkCsrf } from "@/lib/csrf";
 import { isValidEmail } from "@/lib/validation";
+import { EMAIL_TEMPLATE_KEYS } from "@/lib/email-template-defaults";
+import { PRACTICE_INFO_KEYS } from "@/lib/practice-info";
 
 // GET /api/settings
 export const GET = withApiAuth(async () => {
@@ -50,11 +52,23 @@ export const PATCH = withApiAuth(async (req) => {
     "autoArchiveEmail",
     "cronJobEmail",
     "reminderNotificationsEnabled",
+    ...PRACTICE_INFO_KEYS,
+    ...EMAIL_TEMPLATE_KEYS,
   ];
 
   // Validate values
   const timeKeys = ["morningStart", "morningEnd", "afternoonStart", "afternoonEnd"];
   const intKeys = ["requestTimeoutHours", "retentionDaysExpired", "retentionDaysPast"];
+  const subjectTemplateKeys = [
+    "appointmentEmailSubjectTemplate",
+    "reminderEmailSubjectTemplate",
+    "archiveEmailSubjectTemplate",
+  ];
+  const bodyTemplateKeys = [
+    "appointmentEmailBodyTemplate",
+    "reminderEmailBodyTemplate",
+    "archiveEmailBodyTemplate",
+  ];
 
   for (const [key, value] of Object.entries(body)) {
     if (!allowedKeys.includes(key)) continue;
@@ -72,6 +86,22 @@ export const PATCH = withApiAuth(async (req) => {
       if (!Number.isInteger(num) || num < 1) {
         return Response.json({ error: `${key} muss eine positive Ganzzahl sein` }, { status: 400 });
       }
+    }
+
+    if (subjectTemplateKeys.includes(key) && value.length > 120) {
+      return Response.json({ error: "Betreff-Vorlagen dürfen maximal 120 Zeichen lang sein" }, { status: 400 });
+    }
+
+    if (bodyTemplateKeys.includes(key) && value.length > 4000) {
+      return Response.json({ error: "E-Mail-Texte dürfen maximal 4000 Zeichen lang sein" }, { status: 400 });
+    }
+
+    if (key === "emailSignature" && value.length > 2000) {
+      return Response.json({ error: "Die Signatur darf maximal 2000 Zeichen lang sein" }, { status: 400 });
+    }
+
+    if (PRACTICE_INFO_KEYS.includes(key as (typeof PRACTICE_INFO_KEYS)[number]) && value.length > 200) {
+      return Response.json({ error: "Praxisinformationen dürfen maximal 200 Zeichen pro Feld lang sein" }, { status: 400 });
     }
 
     if (key === "adminNotifyEmail" && value !== "") {
