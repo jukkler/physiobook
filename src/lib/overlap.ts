@@ -100,6 +100,26 @@ export function findAppointmentConflictsExcludingSeries(
     .all(endTimeMs, startTimeMs, excludeSeriesId) as ConflictResult[];
 }
 
+export function findAppointmentConflictsExcludingIds(
+  startTimeMs: number,
+  endTimeMs: number,
+  excludeIds: string[]
+): ConflictResult[] {
+  const db = getDb();
+  if (excludeIds.length === 0) return findAppointmentConflicts(startTimeMs, endTimeMs);
+
+  const placeholders = excludeIds.map(() => "?").join(",");
+  return db
+    .prepare(
+      `SELECT id, start_time as startTime, end_time as endTime, patient_name as name
+       FROM appointments
+       WHERE status IN ('CONFIRMED', 'REQUESTED')
+       AND start_time < ? AND end_time > ?
+       AND id NOT IN (${placeholders})`
+    )
+    .all(endTimeMs, startTimeMs, ...excludeIds) as ConflictResult[];
+}
+
 /**
  * Check if a time range has any conflicts (appointments or blockers).
  */

@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
-import { createAppointmentSeries } from "@/lib/appointment-series";
+import { createAppointmentSeries, deleteAppointmentSeriesScope, updateAppointmentSeriesScope } from "@/lib/appointment-series";
 
 function createTestDb() {
   const db = new Database(":memory:");
@@ -150,5 +150,100 @@ describe("createAppointmentSeries", () => {
       created: ["appt-forced-1", "appt-forced-2", "appt-forced-3"],
     });
     expect(db.prepare("SELECT COUNT(*) AS count FROM appointments").get()).toEqual({ count: 4 });
+  });
+});
+
+function seedSeries(db: Database.Database, start: number) {
+  db.prepare(`
+    INSERT INTO appointment_series (
+      id, patient_id, patient_name, first_start_time, duration_minutes, interval_weeks,
+      occurrence_count, last_start_time, status, notes, created_at, updated_at
+    )
+    VALUES ('series-1', 'patient-1', 'Ada Lovelace', ?, 30, 1, 4, ?, 'ACTIVE', 'KG', 1, 1)
+  `).run(start, start + 21 * 86_400_000);
+
+  const insert = db.prepare(`
+    INSERT INTO appointments (
+      id, patient_name, patient_id, start_time, end_time, duration_minutes, status, series_id,
+      series_occurrence_index, series_original_start_time, notes, flagged_notes, reminder_sent, created_at, updated_at
+    )
+    VALUES (?, 'Ada Lovelace', 'patient-1', ?, ?, 30, 'CONFIRMED', 'series-1', ?, ?, 'KG', 0, 0, 1, 1)
+  `);
+
+  for (let index = 0; index < 4; index++) {
+    const occurrenceStart = start + index * 7 * 86_400_000;
+    insert.run(`appt-${index}`, occurrenceStart, occurrenceStart + 30 * 60_000, index, occurrenceStart);
+  }
+}
+
+describe("updateAppointmentSeriesScope", () => {
+  it("marks a single moved occurrence without shifting the whole series", () => {
+    const db = createTestDb();
+    const start = Date.parse("2026-06-03T07:00:00.000Z");
+    seedSeries(db, start);
+
+    updateAppointmentSeriesScope(
+      "appt-1",
+      "single",
+      { startTime: start + 7 * 86_400_000 + 60 * 60_000, durationMinutes: 45 },
+      { db, now: () => 2, uuid: () => "unused", syncPatient: () => "patient-1", updatePatientContact: () => undefined }
+    );
+
+    expect(db.prepare("SELECT start_time, duration_minutes, series_exception_type FROM appointments WHERE id = 'appt-1'").get()).toEqual({
+      start_time: start + 7 * 86_400_000 + 60 * 60_000,
+      duration_minutes: 45,
+      series_exception_type: "moved",
+    });
+    expect(db.prepare("SELECT start_time FROM appointments WHERE id = 'appt-2'").get()).toEqual({
+      start_time: start + 14 * 86_400_000,
+    });
+  });
+
+  it("splits future occurrences into a new series before applying future changes", () => {
+    const db = createTestDb();
+    const start = Date.parse("2026-06-03T07:00:00.000Z");
+    seedSeries(db, start);
+
+    updateAppointmentSeriesScope(
+      "appt-2",
+      "future",
+      { startTime: start + 14 * 86_400_000 + 60 * 60_000 },
+      { db, now: () => 2, uuid: () => "series-2", syncPatient: () => "patient-1", updatePatientContact: () => undefined }
+    );
+
+    expect(db.prepare("SELECT id, occurrence_count FROM appointment_series ORDER BY id").all()).toEqual([
+      { id: "series-1", occurrence_count: 2 },
+      { id: "series-2", occurrence_count: 2 },
+    ]);
+    expect(db.prepare("SELECT id, series_id, series_occurrence_index, start_time FROM appointments ORDER BY id").all()).toEqual([
+      { id: "appt-0", series_id: "series-1", series_occurrence_index: 0, start_time: start },
+      { id: "appt-1", series_id: "series-1", series_occurrence_index: 1, start_time: start + 7 * 86_400_000 },
+      { id: "appt-2", series_id: "series-2", series_occurrence_index: 0, start_time: start + 14 * 86_400_000 + 60 * 60_000 },
+      { id: "appt-3", series_id: "series-2", series_occurrence_index: 1, start_time: start + 21 * 86_400_000 + 60 * 60_000 },
+    ]);
+  });
+});
+
+describe("deleteAppointmentSeriesScope", () => {
+  it("deletes a single occurrence only", () => {
+    const db = createTestDb();
+    const start = Date.parse("2026-06-03T07:00:00.000Z");
+    seedSeries(db, start);
+
+    deleteAppointmentSeriesScope("appt-1", "single", { db, now: () => 2, uuid: () => "unused", syncPatient: () => "patient-1", updatePatientContact: () => undefined });
+
+    expect(db.prepare("SELECT COUNT(*) as count FROM appointments").get()).toEqual({ count: 3 });
+    expect(db.prepare("SELECT COUNT(*) as count FROM appointment_series").get()).toEqual({ count: 1 });
+  });
+
+  it("deletes selected and later occurrences for future scope", () => {
+    const db = createTestDb();
+    const start = Date.parse("2026-06-03T07:00:00.000Z");
+    seedSeries(db, start);
+
+    deleteAppointmentSeriesScope("appt-2", "future", { db, now: () => 2, uuid: () => "unused", syncPatient: () => "patient-1", updatePatientContact: () => undefined });
+
+    expect(db.prepare("SELECT id FROM appointments ORDER BY id").all()).toEqual([{ id: "appt-0" }, { id: "appt-1" }]);
+    expect(db.prepare("SELECT occurrence_count FROM appointment_series WHERE id = 'series-1'").get()).toEqual({ occurrence_count: 2 });
   });
 });
