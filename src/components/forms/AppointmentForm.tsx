@@ -149,14 +149,19 @@ export default function AppointmentForm({
     return payload;
   }
 
-  function replaceEmailPlaceholders(template: string) {
+  function replaceEmailPlaceholders(
+    template: string,
+    practice: { name: string; address: string; phone: string } = PRAXIS
+  ) {
     const startTimeMs = dateTimeToEpoch(date, time);
     const values: Record<string, string> = {
       Name: patientName,
       Datum: formatBerlinDate(startTimeMs),
       Uhrzeit: formatBerlinTime(startTimeMs),
       Dauer: String(duration),
-      Praxisname: PRAXIS.name,
+      Praxisname: practice.name,
+      Praxisadresse: practice.address,
+      Praxistelefon: practice.phone,
     };
 
     return template.replace(/@([A-Za-zÄÖÜäöüß]+)/g, (match, key) => values[key] ?? match);
@@ -177,8 +182,13 @@ export default function AppointmentForm({
         const bodyTemplate =
           settings.appointmentEmailBodyTemplate ||
           EMAIL_TEMPLATE_DEFAULTS.appointmentEmailBodyTemplate;
-        setEmailSubject(replaceEmailPlaceholders(subjectTemplate));
-        setEmailBody(replaceEmailPlaceholders(bodyTemplate));
+        const practice = {
+          name: settings.practiceName || PRAXIS.name,
+          address: settings.practiceAddress || PRAXIS.address,
+          phone: settings.practicePhone || PRAXIS.phone,
+        };
+        setEmailSubject(replaceEmailPlaceholders(subjectTemplate, practice));
+        setEmailBody(replaceEmailPlaceholders(bodyTemplate, practice));
       } catch {
         setEmailSubject(replaceEmailPlaceholders(EMAIL_TEMPLATE_DEFAULTS.appointmentEmailSubjectTemplate));
         setEmailBody(replaceEmailPlaceholders(EMAIL_TEMPLATE_DEFAULTS.appointmentEmailBodyTemplate));

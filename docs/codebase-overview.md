@@ -74,7 +74,7 @@ docs/                   Projektplaene und Dokumentation
 - `src/app/dashboard/page.tsx`: Geschuetzte Kalenderseite.
 - `src/components/DashboardClient.tsx`: Haupt-Client-State fuer Kalenderansicht, Dialoge, Suche, Zoom und Refresh.
 - `src/app/patienten/page.tsx` und `src/components/PatientenClient.tsx`: Patientenverwaltung.
-- `src/app/verwaltung/page.tsx` und `src/components/VerwaltungClient.tsx`: Einstellungen, SMTP, Archiv, Import usw.
+- `src/app/verwaltung/page.tsx` und `src/components/VerwaltungClient.tsx`: Praxisinformationen, Einstellungen, SMTP, Archiv, Import usw.
 - `src/app/email-einstellungen/page.tsx` und `src/components/EmailSettingsClient.tsx`: E-Mail-Vorlagen fuer Terminfenster, Erinnerungen, Archivversand und globale Signatur.
 - `src/app/widget/page.tsx`: Oeffentliches iFrame-faehiges Buchungs-Widget.
 - `src/app/login/page.tsx`: Admin-Login.
@@ -280,7 +280,13 @@ E-Mail-Texte werden ueber `src/lib/email-templates.ts` gerendert. Die editierbar
 - `archiveEmailSubjectTemplate` / `archiveEmailBodyTemplate`
 - `emailSignature`
 
-Unterstuetzte Platzhalter sind unter anderem `@Name`, `@Datum`, `@Uhrzeit`, `@Dauer`, `@ArchivTyp`, `@ArchivTitel`, `@ArchivDatum` und `@Praxisname`.
+Praxisinformationen werden ebenfalls in `settings` gespeichert:
+
+- `practiceName`
+- `practiceAddress`
+- `practicePhone`
+
+Unterstuetzte Platzhalter sind unter anderem `@Name`, `@Datum`, `@Uhrzeit`, `@Dauer`, `@ArchivTyp`, `@ArchivTitel`, `@ArchivDatum`, `@Praxisname`, `@Praxisadresse` und `@Praxistelefon`.
 
 ## PDF-Archiv und Import
 

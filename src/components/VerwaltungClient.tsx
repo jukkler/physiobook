@@ -7,10 +7,21 @@ import ArchiveDownloadPanel from "@/components/verwaltung/ArchiveDownloadPanel";
 import SmtpSettingsPanel from "@/components/verwaltung/SmtpSettingsPanel";
 import ReminderSettingsPanel from "@/components/verwaltung/ReminderSettingsPanel";
 import AutoArchivePanel from "@/components/verwaltung/AutoArchivePanel";
+import PracticeInfoPanel from "@/components/verwaltung/PracticeInfoPanel";
+import { PRACTICE_INFO_DEFAULTS } from "@/lib/practice-info";
 
 export default function VerwaltungClient() {
   const [date, setDate] = useState(todayBerlin);
   const [downloading, setDownloading] = useState<string | null>(null);
+
+  // Practice info
+  const [practiceInfo, setPracticeInfo] = useState({
+    practiceName: PRACTICE_INFO_DEFAULTS.practiceName,
+    practiceAddress: PRACTICE_INFO_DEFAULTS.practiceAddress,
+    practicePhone: PRACTICE_INFO_DEFAULTS.practicePhone,
+  });
+  const [practiceSaving, setPracticeSaving] = useState(false);
+  const [practiceMessage, setPracticeMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Email / SMTP settings
   const [smtpSettings, setSmtpSettings] = useState({
@@ -137,6 +148,11 @@ export default function VerwaltungClient() {
             autoArchiveEmail: data.autoArchiveEmail || prev.autoArchiveEmail,
             cronJobEmail: data.cronJobEmail || prev.cronJobEmail,
           }));
+          setPracticeInfo((prev) => ({
+            practiceName: data.practiceName || prev.practiceName,
+            practiceAddress: data.practiceAddress || prev.practiceAddress,
+            practicePhone: data.practicePhone || prev.practicePhone,
+          }));
           if (data.reminderNotificationsEnabled) {
             setReminderEnabled(data.reminderNotificationsEnabled);
           }
@@ -148,6 +164,33 @@ export default function VerwaltungClient() {
 
   function updateSmtp(key: string, value: string) {
     setSmtpSettings((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function updatePracticeInfo(key: "practiceName" | "practiceAddress" | "practicePhone", value: string) {
+    setPracticeInfo((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handlePracticeSave() {
+    setPracticeSaving(true);
+    setPracticeMessage(null);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(practiceInfo),
+      });
+      if (res.ok) {
+        setPracticeMessage({ type: "success", text: "Gespeichert" });
+      } else {
+        const data = await res.json().catch(() => null);
+        setPracticeMessage({ type: "error", text: data?.error || "Fehler beim Speichern" });
+      }
+    } catch {
+      setPracticeMessage({ type: "error", text: "Netzwerkfehler" });
+    } finally {
+      setPracticeSaving(false);
+      setTimeout(() => setPracticeMessage(null), 3000);
+    }
   }
 
   async function handleSmtpSave() {
@@ -356,6 +399,14 @@ export default function VerwaltungClient() {
           className="px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
+
+      <PracticeInfoPanel
+        practiceInfo={practiceInfo}
+        saving={practiceSaving}
+        message={practiceMessage}
+        onChange={updatePracticeInfo}
+        onSave={handlePracticeSave}
+      />
 
       <PdfImportPanel
         pdfInputRef={pdfInputRef}

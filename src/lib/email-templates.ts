@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 import { escapeHtml } from "@/lib/html";
-import { PRAXIS } from "@/lib/constants";
+import { getPracticeInfo } from "@/lib/practice-info";
 import {
   EMAIL_TEMPLATE_DEFAULTS,
   EMAIL_TEMPLATE_KEYS,
@@ -8,7 +8,7 @@ import {
 } from "@/lib/email-template-defaults";
 
 export type EmailPlaceholderContext = Partial<Record<
-  "Name" | "Datum" | "Uhrzeit" | "Dauer" | "ArchivTyp" | "ArchivTitel" | "ArchivDatum" | "Praxisname",
+  "Name" | "Datum" | "Uhrzeit" | "Dauer" | "ArchivTyp" | "ArchivTitel" | "ArchivDatum" | "Praxisname" | "Praxisadresse" | "Praxistelefon",
   string | number
 >>;
 
@@ -33,7 +33,6 @@ export function getEmailTemplateSettings(db: Database.Database): Record<EmailTem
 
 export function replaceEmailPlaceholders(template: string, context: EmailPlaceholderContext): string {
   const values: EmailPlaceholderContext = {
-    Praxisname: PRAXIS.name,
     ...context,
   };
 
@@ -78,16 +77,27 @@ export function renderEmail({
   };
 }
 
+function withPracticeContext(db: Database.Database, context: EmailPlaceholderContext): EmailPlaceholderContext {
+  const practice = getPracticeInfo(db);
+  return {
+    Praxisname: practice.name,
+    Praxisadresse: practice.address,
+    Praxistelefon: practice.phone,
+    ...context,
+  };
+}
+
 export function renderAppointmentDefaultEmail(
   db: Database.Database,
   context: EmailPlaceholderContext
 ): RenderedEmail {
   const settings = getEmailTemplateSettings(db);
+  const fullContext = withPracticeContext(db, context);
   return renderEmail({
     subjectTemplate: settings.appointmentEmailSubjectTemplate,
     bodyTemplate: settings.appointmentEmailBodyTemplate,
     signatureTemplate: settings.emailSignature,
-    context,
+    context: fullContext,
   });
 }
 
@@ -96,11 +106,12 @@ export function renderReminderEmail(
   context: EmailPlaceholderContext
 ): RenderedEmail {
   const settings = getEmailTemplateSettings(db);
+  const fullContext = withPracticeContext(db, context);
   return renderEmail({
     subjectTemplate: settings.reminderEmailSubjectTemplate,
     bodyTemplate: settings.reminderEmailBodyTemplate,
     signatureTemplate: settings.emailSignature,
-    context,
+    context: fullContext,
   });
 }
 
@@ -109,11 +120,12 @@ export function renderArchiveEmail(
   context: EmailPlaceholderContext
 ): RenderedEmail {
   const settings = getEmailTemplateSettings(db);
+  const fullContext = withPracticeContext(db, context);
   return renderEmail({
     subjectTemplate: settings.archiveEmailSubjectTemplate,
     bodyTemplate: settings.archiveEmailBodyTemplate,
     signatureTemplate: settings.emailSignature,
-    context,
+    context: fullContext,
   });
 }
 
@@ -124,7 +136,8 @@ export function renderCustomEmailWithSignature(
   context: EmailPlaceholderContext
 ): RenderedEmail {
   const settings = getEmailTemplateSettings(db);
-  const signature = replaceEmailPlaceholders(settings.emailSignature, context);
+  const fullContext = withPracticeContext(db, context);
+  const signature = replaceEmailPlaceholders(settings.emailSignature, fullContext);
   return {
     subject,
     html: plainTextToEmailHtml(appendSignature(message, signature)),

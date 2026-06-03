@@ -56,4 +56,6 @@ export const EMAIL_PLACEHOLDERS = [
   { token: "@ArchivTitel", description: "Titel des erzeugten Archivs" },
   { token: "@ArchivDatum", description: "Bezugsdatum des Archivs" },
   { token: "@Praxisname", description: "Name der Praxis" },
+  { token: "@Praxisadresse", description: "Adresse der Praxis" },
+  { token: "@Praxistelefon", description: "Telefonnummer der Praxis" },
 ];

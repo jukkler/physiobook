@@ -4,6 +4,7 @@ import { withApiAuth } from "@/lib/auth";
 import { checkCsrf } from "@/lib/csrf";
 import { isValidEmail } from "@/lib/validation";
 import { EMAIL_TEMPLATE_KEYS } from "@/lib/email-template-defaults";
+import { PRACTICE_INFO_KEYS } from "@/lib/practice-info";
 
 // GET /api/settings
 export const GET = withApiAuth(async () => {
@@ -51,6 +52,7 @@ export const PATCH = withApiAuth(async (req) => {
     "autoArchiveEmail",
     "cronJobEmail",
     "reminderNotificationsEnabled",
+    ...PRACTICE_INFO_KEYS,
     ...EMAIL_TEMPLATE_KEYS,
   ];
 
@@ -96,6 +98,10 @@ export const PATCH = withApiAuth(async (req) => {
 
     if (key === "emailSignature" && value.length > 2000) {
       return Response.json({ error: "Die Signatur darf maximal 2000 Zeichen lang sein" }, { status: 400 });
+    }
+
+    if (PRACTICE_INFO_KEYS.includes(key as (typeof PRACTICE_INFO_KEYS)[number]) && value.length > 200) {
+      return Response.json({ error: "Praxisinformationen dürfen maximal 200 Zeichen pro Feld lang sein" }, { status: 400 });
     }
 
     if (key === "adminNotifyEmail" && value !== "") {

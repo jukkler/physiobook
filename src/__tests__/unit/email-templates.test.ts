@@ -71,4 +71,28 @@ describe("email templates", () => {
     expect(rendered.html).toContain("Hallo Dunkel um 08:00");
     expect(rendered.html).toContain("Team Therapiezentrum Ziesemer");
   });
+
+  it("uses stored practice info for practice placeholders", () => {
+    const db = createDb();
+    db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(
+      "practiceName",
+      "Praxis Muster"
+    );
+    db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(
+      "practiceAddress",
+      "Musterstraße 1"
+    );
+    db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(
+      "practicePhone",
+      "01234"
+    );
+
+    const rendered = renderReminderEmail(db, {
+      Name: "Dunkel",
+      Datum: "03.06.2026",
+      Uhrzeit: "08:00",
+    });
+
+    expect(rendered.html).toContain("Praxis Muster");
+  });
 });
