@@ -29,6 +29,11 @@ function createDb() {
       created_at integer NOT NULL,
       updated_at integer NOT NULL
     );
+
+    CREATE TABLE settings (
+      key text PRIMARY KEY,
+      value text NOT NULL
+    );
   `);
   return db;
 }
@@ -54,6 +59,10 @@ describe("sendAppointmentEmail", () => {
          status, notes, created_at, updated_at
        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run("appt-1", "Dunkel", "patient-1", start, start + 30 * 60_000, 30, "CONFIRMED", "KG <test>", 1, 1);
+    db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(
+      "emailSignature",
+      "Viele Grüße\n@Name"
+    );
 
     const result = await sendAppointmentEmail({
       db,
@@ -70,6 +79,7 @@ describe("sendAppointmentEmail", () => {
     expect(send.mock.calls[0][1]).toBe("Termin verschoben");
     expect(send.mock.calls[0][2]).toContain("<p>Hallo Dunkel,</p>");
     expect(send.mock.calls[0][2]).toContain("<p>Ihr Termin ist bestätigt.<br>Bitte &lt;antworten&gt;.</p>");
+    expect(send.mock.calls[0][2]).toContain("<p>Viele Grüße<br>Dunkel</p>");
   });
 
   it("returns 404 when appointment is missing", async () => {

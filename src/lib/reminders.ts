@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { getDb } from "./db";
-import { escapeHtml } from "@/lib/html";
+import { formatBerlinDate, formatBerlinTime } from "@/lib/time";
+import { renderReminderEmail } from "@/lib/email-templates";
 
 /**
  * Queue reminder emails for confirmed appointments starting within 24 hours.
@@ -52,24 +53,18 @@ export function queueAppointmentReminders(): number {
 
   const queueAll = db.transaction(() => {
     for (const appt of appointments) {
-      const dateStr = new Date(appt.start_time).toLocaleString("de-DE", {
-        timeZone: "Europe/Berlin",
-        weekday: "long",
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
+      const rendered = renderReminderEmail(db, {
+        Name: appt.patient_name,
+        Datum: formatBerlinDate(appt.start_time),
+        Uhrzeit: formatBerlinTime(appt.start_time),
+        Dauer: appt.duration_minutes,
       });
 
       insertEmail.run(
         uuidv4(),
         appt.contact_email,
-        "Erinnerung: Ihr Termin morgen",
-        `<p>Hallo ${escapeHtml(appt.patient_name)},</p>
-         <p>wir m&ouml;chten Sie an Ihren Termin erinnern:</p>
-         <p><strong>${dateStr}</strong> (${appt.duration_minutes} Min.)</p>
-         <p>Wir freuen uns auf Ihren Besuch!</p>`,
+        rendered.subject,
+        rendered.html,
         now
       );
 

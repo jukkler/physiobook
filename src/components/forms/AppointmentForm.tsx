@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { epochToDateInput, epochToTimeInput, dateTimeToEpoch, formatBerlinDate, formatBerlinTime } from "@/lib/time";
 import { PRAXIS } from "@/lib/constants";
 import { isValidEmail } from "@/lib/validation";
+import { EMAIL_TEMPLATE_DEFAULTS } from "@/lib/email-template-defaults";
 import type { Appointment, AppointmentSeriesScope, AppointmentWithContact } from "@/lib/db/schema";
 import SeriesFields from "@/components/forms/SeriesFields";
 import SeriesScopeDialog from "@/components/forms/SeriesScopeDialog";
@@ -60,6 +61,7 @@ export default function AppointmentForm({
   const [showEmailComposer, setShowEmailComposer] = useState(false);
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
+  const [emailTemplateLoading, setEmailTemplateLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [pendingScopeAction, setPendingScopeAction] = useState<"save" | "delete" | null>(null);
   const [showConflict, setShowConflict] = useState(false);
@@ -147,34 +149,44 @@ export default function AppointmentForm({
     return payload;
   }
 
-  function buildDefaultEmailSubject() {
-    return `Ihr Termin am ${formatBerlinDate(dateTimeToEpoch(date, time))}`;
-  }
-
-  function buildDefaultEmailBody() {
+  function replaceEmailPlaceholders(template: string) {
     const startTimeMs = dateTimeToEpoch(date, time);
-    const endTimeMs = startTimeMs + duration * 60_000;
-    const notesLine = notes.trim() ? `\nHinweis: ${notes.trim()}` : "";
+    const values: Record<string, string> = {
+      Name: patientName,
+      Datum: formatBerlinDate(startTimeMs),
+      Uhrzeit: formatBerlinTime(startTimeMs),
+      Dauer: String(duration),
+      Praxisname: PRAXIS.name,
+    };
 
-    return `Hallo ${patientName},
-
-hiermit senden wir Ihnen Ihre Termininformation:
-
-${formatBerlinDate(startTimeMs)}
-${formatBerlinTime(startTimeMs)} - ${formatBerlinTime(endTimeMs)} Uhr
-${duration} Minuten${notesLine}
-
-Falls Sie den Termin nicht wahrnehmen können, melden Sie sich bitte rechtzeitig in der Praxis.
-
-Viele Grüße
-${PRAXIS.name}`;
+    return template.replace(/@([A-Za-zÄÖÜäöüß]+)/g, (match, key) => values[key] ?? match);
   }
 
-  function openEmailComposer() {
+  async function openEmailComposer() {
     setEmailMessage(null);
     setError("");
-    setEmailSubject((current) => current || buildDefaultEmailSubject());
-    setEmailBody((current) => current || buildDefaultEmailBody());
+
+    if (!emailSubject && !emailBody) {
+      setEmailTemplateLoading(true);
+      try {
+        const res = await fetch("/api/settings");
+        const settings = res.ok ? await res.json() : {};
+        const subjectTemplate =
+          settings.appointmentEmailSubjectTemplate ||
+          EMAIL_TEMPLATE_DEFAULTS.appointmentEmailSubjectTemplate;
+        const bodyTemplate =
+          settings.appointmentEmailBodyTemplate ||
+          EMAIL_TEMPLATE_DEFAULTS.appointmentEmailBodyTemplate;
+        setEmailSubject(replaceEmailPlaceholders(subjectTemplate));
+        setEmailBody(replaceEmailPlaceholders(bodyTemplate));
+      } catch {
+        setEmailSubject(replaceEmailPlaceholders(EMAIL_TEMPLATE_DEFAULTS.appointmentEmailSubjectTemplate));
+        setEmailBody(replaceEmailPlaceholders(EMAIL_TEMPLATE_DEFAULTS.appointmentEmailBodyTemplate));
+      } finally {
+        setEmailTemplateLoading(false);
+      }
+    }
+
     setShowEmailComposer(true);
   }
 
@@ -634,11 +646,11 @@ ${PRAXIS.name}`;
               <button
                 type="button"
                 onClick={openEmailComposer}
-                disabled={!canSendEmail}
+                disabled={!canSendEmail || emailTemplateLoading}
                 title={!contactEmail ? "Keine E-Mail-Adresse hinterlegt" : !isValidEmail(contactEmail) ? "Keine gültige E-Mail-Adresse hinterlegt" : "Eigene E-Mail an Patienten schreiben"}
                 className="px-4 py-2 text-sm text-gray-700 border border-dashed border-gray-400 rounded-md hover:bg-gray-50 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                E-Mail schreiben
+                {emailTemplateLoading ? "Lade..." : "E-Mail schreiben"}
               </button>
               <button
                 type="button"
@@ -685,6 +697,10 @@ ${PRAXIS.name}`;
                   {emailBody.length}/{EMAIL_BODY_MAX_LENGTH}
                 </div>
               </div>
+
+              <p className="text-xs text-blue-800">
+                Die Signatur aus den E-Mail Einstellungen wird beim Versand automatisch angehängt.
+              </p>
 
               <div className="flex items-center gap-2">
                 <button

@@ -22,6 +22,7 @@ export default async function VerwaltungPage() {
               navItems={[
                 { label: "Kalender", href: "/dashboard" },
                 { label: "Patienten", href: "/patienten" },
+                { label: "E-Mail Einstellungen", href: "/email-einstellungen" },
               ]}
             />
           </div>

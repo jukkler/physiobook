@@ -27,6 +27,7 @@ export default async function DashboardPage() {
               navItems={[
                 { label: "Verwaltung", href: "/verwaltung" },
                 { label: "Patienten", href: "/patienten" },
+                { label: "E-Mail Einstellungen", href: "/email-einstellungen" },
               ]}
             />
           </div>

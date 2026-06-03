@@ -1,5 +1,6 @@
 // src/lib/settings.ts
 import { getDb } from "@/lib/db";
+import { EMAIL_TEMPLATE_DEFAULTS } from "@/lib/email-template-defaults";
 
 type SettingKey = string;
 
@@ -12,6 +13,7 @@ const DEFAULTS: Record<string, string> = {
   requestTimeoutHours: "48",
   retentionDaysExpired: "30",
   retentionDaysPast: "90",
+  ...EMAIL_TEMPLATE_DEFAULTS,
 };
 
 /**

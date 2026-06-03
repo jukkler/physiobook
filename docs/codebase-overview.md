@@ -49,6 +49,7 @@ src/
     dashboard/          Admin-Kalender
     patienten/          Patientenverwaltung
     verwaltung/         Einstellungen und Admin-Werkzeuge
+    email-einstellungen/ E-Mail-Textvorlagen und Signatur
     widget/             Oeffentliches Buchungs-Widget
     login/              Login-Seite
     api/                REST-artige API-Routen
@@ -74,6 +75,7 @@ docs/                   Projektplaene und Dokumentation
 - `src/components/DashboardClient.tsx`: Haupt-Client-State fuer Kalenderansicht, Dialoge, Suche, Zoom und Refresh.
 - `src/app/patienten/page.tsx` und `src/components/PatientenClient.tsx`: Patientenverwaltung.
 - `src/app/verwaltung/page.tsx` und `src/components/VerwaltungClient.tsx`: Einstellungen, SMTP, Archiv, Import usw.
+- `src/app/email-einstellungen/page.tsx` und `src/components/EmailSettingsClient.tsx`: E-Mail-Vorlagen fuer Terminfenster, Erinnerungen, Archivversand und globale Signatur.
 - `src/app/widget/page.tsx`: Oeffentliches iFrame-faehiges Buchungs-Widget.
 - `src/app/login/page.tsx`: Admin-Login.
 
@@ -270,6 +272,15 @@ Cron fuehrt nacheinander aus:
 Der Cron-Endpoint ist oeffentlich erreichbar, aber ueber `Authorization: Bearer <CRON_SECRET>` geschuetzt.
 
 Manuell aus dem Kalender versendete Termin-E-Mails nutzen direkten SMTP-Versand ueber `src/lib/appointment-email.ts`. Das Terminformular oeffnet dafuer einen Composer mit editierbarem Betreff und Nachrichtentext; das Backend validiert die Inhalte und escaped den Text vor dem HTML-Versand. Dadurch kann das Terminformular sofort Erfolg oder SMTP-/Validierungsfehler anzeigen.
+
+E-Mail-Texte werden ueber `src/lib/email-templates.ts` gerendert. Die editierbaren Vorlagen liegen in der `settings`-Tabelle:
+
+- `appointmentEmailSubjectTemplate` / `appointmentEmailBodyTemplate`
+- `reminderEmailSubjectTemplate` / `reminderEmailBodyTemplate`
+- `archiveEmailSubjectTemplate` / `archiveEmailBodyTemplate`
+- `emailSignature`
+
+Unterstuetzte Platzhalter sind unter anderem `@Name`, `@Datum`, `@Uhrzeit`, `@Dauer`, `@ArchivTyp`, `@ArchivTitel`, `@ArchivDatum` und `@Praxisname`.
 
 ## PDF-Archiv und Import
 

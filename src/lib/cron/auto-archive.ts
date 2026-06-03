@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
 import { generateArchivePdf } from "@/lib/archive";
 import { sendEmailWithAttachment } from "@/lib/email";
+import { renderArchiveEmail } from "@/lib/email-templates";
 
 /**
  * Check if auto-archive should run and send it if due.
@@ -54,6 +55,11 @@ export async function runAutoArchive(): Promise<number> {
   };
 
   const { buffer, filename, title } = await generateArchivePdf(archiveType, archiveDate);
+  const rendered = renderArchiveEmail(getDb(), {
+    ArchivTyp: archiveLabels[archiveType],
+    ArchivTitel: title,
+    ArchivDatum: archiveDate,
+  });
 
   const recipients = [config.autoArchiveEmail];
   if (config.cronJobEmail) recipients.push(config.cronJobEmail);
@@ -62,8 +68,8 @@ export async function runAutoArchive(): Promise<number> {
   for (const recipient of recipients) {
     const result = await sendEmailWithAttachment(
       recipient,
-      title,
-      `<p>Im Anhang finden Sie das ${archiveLabels[archiveType]}.</p>`,
+      rendered.subject,
+      rendered.html,
       { filename, content: buffer }
     );
     if (result.ok) sentCount++;

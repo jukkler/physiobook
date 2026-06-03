@@ -1,7 +1,8 @@
 import type Database from "better-sqlite3";
-import { escapeHtml } from "@/lib/html";
 import { sendHtmlEmail as defaultSendHtmlEmail } from "@/lib/email";
 import { isValidEmail } from "@/lib/validation";
+import { formatBerlinDate, formatBerlinTime } from "@/lib/time";
+import { renderCustomEmailWithSignature } from "@/lib/email-templates";
 
 type SendHtmlEmail = (
   to: string,
@@ -25,16 +26,9 @@ type SendAppointmentEmailResult =
 interface AppointmentEmailRow {
   id: string;
   patient_name: string;
+  start_time: number;
+  duration_minutes: number;
   contact_email: string | null;
-}
-
-function plainTextToHtml(text: string): string {
-  return text
-    .split(/\n{2,}/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean)
-    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`)
-    .join("\n");
 }
 
 function parseEmailContent(subject: unknown, message: unknown) {
@@ -60,7 +54,7 @@ function parseEmailContent(subject: unknown, message: unknown) {
   return {
     ok: true as const,
     subject: trimmedSubject,
-    html: plainTextToHtml(trimmedMessage),
+    message: trimmedMessage,
   };
 }
 
@@ -80,6 +74,8 @@ export async function sendAppointmentEmail({
     .prepare(
       `SELECT a.id,
               a.patient_name,
+              a.start_time,
+              a.duration_minutes,
               p.email as contact_email
        FROM appointments a
        LEFT JOIN patients p ON p.id = a.patient_id
@@ -99,10 +95,22 @@ export async function sendAppointmentEmail({
     return { ok: false, status: 400, error: "Für diesen Patienten ist keine gültige E-Mail-Adresse hinterlegt" };
   }
 
+  const rendered = renderCustomEmailWithSignature(
+    db,
+    content.subject,
+    content.message,
+    {
+      Name: row.patient_name,
+      Datum: formatBerlinDate(row.start_time),
+      Uhrzeit: formatBerlinTime(row.start_time),
+      Dauer: row.duration_minutes,
+    }
+  );
+
   const result = await sendHtmlEmail(
     row.contact_email,
-    content.subject,
-    content.html
+    rendered.subject,
+    rendered.html
   );
 
   if (!result.ok) {
