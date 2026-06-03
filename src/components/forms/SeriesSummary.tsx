@@ -20,8 +20,8 @@ export default function SeriesSummary({ summary }: SeriesSummaryProps) {
           : null;
 
   return (
-    <section className="bg-gray-50 border rounded-md p-3 space-y-1">
-      <p className="text-sm font-medium text-gray-800">Teil einer Serie</p>
+    <section className="bg-blue-50 border border-blue-200 rounded-md p-3 space-y-1">
+      <p className="text-sm font-semibold text-blue-950">Teil einer Serie</p>
       <p className="text-xs text-gray-600">
         {intervalLabel}, {summary.occurrenceCount} Termine
       </p>

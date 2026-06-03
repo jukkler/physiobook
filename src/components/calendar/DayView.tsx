@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { formatBerlinDate, berlinDayStartMs, dateTimeToEpoch } from "@/lib/time";
 import { computeOverlapColumns } from "@/lib/layout";
-import type { Appointment, AppointmentWithContact, Blocker, AppSettings as Settings } from "@/lib/db/schema";
+import type { AppointmentWithContact, Blocker, AppSettings as Settings } from "@/lib/db/schema";
 import AppointmentCard from "./AppointmentCard";
 
 interface DayViewProps {
@@ -294,6 +294,7 @@ export default function DayView({
                       status={a.status}
                       isLunchTime={apptInLunch}
                       notes={a.notes}
+                      seriesSummary={a.seriesSummary}
                       onConfirm={handleConfirm}
                       onReject={handleReject}
                       onClick={() => onEditAppointment(a)}

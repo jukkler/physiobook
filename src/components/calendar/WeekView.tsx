@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { formatBerlinTime, getWeekMonday, addDays, berlinDayStartMs, getIsoWeekNumber, todayBerlin } from "@/lib/time";
 import { computeOverlapColumns } from "@/lib/layout";
-import type { Appointment, Blocker, AppSettings as Settings } from "@/lib/db/schema";
+import type { AppointmentWithContact, Blocker, AppSettings as Settings } from "@/lib/db/schema";
 
 interface WeekViewProps {
   date: string; // any date in the week
@@ -20,7 +20,7 @@ export default function WeekView({
   onDayClick,
   onBlockerClick,
 }: WeekViewProps) {
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointments, setAppointments] = useState<AppointmentWithContact[]>([]);
   const [blockersList, setBlockers] = useState<Blocker[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,7 +75,7 @@ export default function WeekView({
     onDateChange(berlinDate);
   }
 
-  function getAppointmentsForDay(dayDate: string): Appointment[] {
+  function getAppointmentsForDay(dayDate: string): AppointmentWithContact[] {
     const dayStart = berlinDayStartMs(dayDate);
     const dayEnd = dayStart + 24 * 60 * 60 * 1000;
     return appointments.filter(
@@ -341,7 +341,7 @@ export default function WeekView({
                           }}
                         >
                           <span className="text-xs font-medium truncate block">
-                            {a.patientName}
+                            {a.seriesSummary ? "Serie · " : ""}{a.patientName}
                           </span>
                           <span className="text-[11px] opacity-70 truncate block">
                             {formatBerlinTime(a.startTime)}

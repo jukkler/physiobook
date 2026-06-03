@@ -313,6 +313,10 @@ export default function AppointmentForm({
             </div>
           )}
 
+          {isEdit && appointment.seriesSummary && (
+            <SeriesSummary summary={appointment.seriesSummary} />
+          )}
+
           <div className="relative" ref={suggestionsRef}>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Patient *
@@ -462,10 +466,6 @@ export default function AppointmentForm({
             />
             <span className="text-xs text-gray-400">{notes.length}/200</span>
           </div>
-
-          {isEdit && appointment.seriesSummary && (
-            <SeriesSummary summary={appointment.seriesSummary} />
-          )}
 
           <div className="grid grid-cols-3 gap-2 pt-2">
             <button

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { formatBerlinTime, addDays, berlinDayStartMs, getMonthName } from "@/lib/time";
-import type { Appointment, Blocker } from "@/lib/db/schema";
+import type { AppointmentWithContact, Blocker } from "@/lib/db/schema";
 
 interface MonthViewProps {
   date: string; // any date in the month
@@ -46,7 +46,7 @@ export default function MonthView({
   onDayClick,
   onBlockerClick,
 }: MonthViewProps) {
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointments, setAppointments] = useState<AppointmentWithContact[]>([]);
   const [blockersList, setBlockers] = useState<Blocker[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -99,7 +99,7 @@ export default function MonthView({
     onDateChange(berlinDate);
   }
 
-  function getAppointmentsForDay(dayDate: string): Appointment[] {
+  function getAppointmentsForDay(dayDate: string): AppointmentWithContact[] {
     const dayStart = berlinDayStartMs(dayDate);
     const dayEnd = dayStart + 24 * 60 * 60 * 1000;
     return appointments
@@ -237,6 +237,7 @@ export default function MonthView({
                       >
                         <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT[a.status] || STATUS_DOT.CONFIRMED}`} />
                         <span className="text-gray-500">{formatBerlinTime(a.startTime)}</span>
+                        {a.seriesSummary && <span className="text-blue-600 font-semibold">Serie</span>}
                         <span className="truncate font-medium">{a.patientName}</span>
                       </div>
                     ))}
