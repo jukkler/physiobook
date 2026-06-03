@@ -56,6 +56,12 @@ interface SeriesAppointmentRow {
   notes: string | null;
 }
 
+interface ProposedAppointmentTime {
+  id: string;
+  start: number;
+  end: number;
+}
+
 export function defaultAppointmentSeriesDeps(): AppointmentSeriesServiceDeps {
   return {
     db: getDb(),
@@ -175,6 +181,51 @@ function getAppointmentOrThrow(db: Database.Database, id: string): SeriesAppoint
   return row;
 }
 
+function assertNoConflictsForProposedTimes(
+  db: Database.Database,
+  proposedTimes: ProposedAppointmentTime[],
+  excludedAppointmentIds: Set<string>
+): void {
+  if (proposedTimes.length === 0) return;
+
+  const rangeStart = Math.min(...proposedTimes.map((proposed) => proposed.start));
+  const rangeEnd = Math.max(...proposedTimes.map((proposed) => proposed.end));
+  const existingAppointments = db.prepare(`
+    SELECT id, start_time as startTime, end_time as endTime
+    FROM appointments
+    WHERE status IN ('CONFIRMED', 'REQUESTED')
+      AND start_time < ?
+      AND end_time > ?
+  `).all(rangeEnd, rangeStart) as { id: string; startTime: number; endTime: number }[];
+  const existingBlockers = db.prepare(`
+    SELECT id, start_time as startTime, end_time as endTime
+    FROM blockers
+    WHERE start_time < ?
+      AND end_time > ?
+  `).all(rangeEnd, rangeStart) as { id: string; startTime: number; endTime: number }[];
+
+  const conflicts = new Set<string>();
+  for (const proposed of proposedTimes) {
+    for (const appointment of existingAppointments) {
+      if (
+        !excludedAppointmentIds.has(appointment.id) &&
+        hasOverlap(proposed.start, proposed.end, appointment.startTime, appointment.endTime)
+      ) {
+        conflicts.add(appointment.id);
+      }
+    }
+    for (const blocker of existingBlockers) {
+      if (hasOverlap(proposed.start, proposed.end, blocker.startTime, blocker.endTime)) {
+        conflicts.add(blocker.id);
+      }
+    }
+  }
+
+  if (conflicts.size > 0) {
+    throw new Error(`Zeitkonflikt: ${conflicts.size} Konflikte gefunden`);
+  }
+}
+
 function splitFutureOccurrences(
   selected: SeriesAppointmentRow,
   deps: AppointmentSeriesServiceDeps
@@ -250,6 +301,15 @@ export function updateAppointmentSeriesScope(
     const newEnd = newStart + newDuration * 60_000;
     const moved = newStart !== selected.start_time || newDuration !== selected.duration_minutes;
     const exceptionType = moved ? "moved" : selected.series_exception_type;
+
+    if (moved && !input.force) {
+      assertNoConflictsForProposedTimes(
+        deps.db,
+        [{ id: appointmentId, start: newStart, end: newEnd }],
+        new Set([appointmentId])
+      );
+    }
+
     const patientId = input.patientName && input.patientName !== selected.patient_name
       ? deps.syncPatient(input.patientName, input.contactEmail ?? null, input.contactPhone ?? null, now)
       : selected.patient_id;
@@ -291,15 +351,37 @@ export function updateAppointmentSeriesScope(
     return;
   }
 
-  const targetSeriesId = scope === "future" ? deps.db.transaction(() => splitFutureOccurrences(selected, deps))() : selected.series_id;
-  const anchor = scope === "future" ? getAppointmentOrThrow(deps.db, appointmentId) : selected;
-  const timeDelta = input.startTime ? input.startTime - anchor.start_time : 0;
+  let targetSeriesId = selected.series_id;
+  const anchor = selected;
+  if (scope === "future" && selected.series_occurrence_index === null) throw new Error("Termin gehört zu keiner Serie");
   const rows = deps.db.prepare(`
     SELECT *
     FROM appointments
     WHERE series_id = ?
+      ${scope === "future" ? "AND series_occurrence_index >= ?" : ""}
     ORDER BY series_occurrence_index ASC
-  `).all(targetSeriesId) as SeriesAppointmentRow[];
+  `).all(
+    selected.series_id,
+    ...(scope === "future" ? [selected.series_occurrence_index] : [])
+  ) as SeriesAppointmentRow[];
+  const timeDelta = input.startTime !== undefined ? input.startTime - anchor.start_time : 0;
+  const durationChanged = input.durationMinutes !== undefined && rows.some((row) => input.durationMinutes !== row.duration_minutes);
+
+  if ((timeDelta !== 0 || durationChanged) && !input.force) {
+    assertNoConflictsForProposedTimes(
+      deps.db,
+      rows.map((row) => {
+        const newStart = row.start_time + timeDelta;
+        const newDuration = input.durationMinutes ?? row.duration_minutes;
+        return { id: row.id, start: newStart, end: newStart + newDuration * 60_000 };
+      }),
+      new Set(rows.map((row) => row.id))
+    );
+  }
+
+  if (scope === "future") {
+    targetSeriesId = deps.db.transaction(() => splitFutureOccurrences(selected, deps))();
+  }
 
   const patientId = input.patientName && input.patientName !== anchor.patient_name
     ? deps.syncPatient(input.patientName, input.contactEmail ?? null, input.contactPhone ?? null, now)
@@ -313,6 +395,7 @@ export function updateAppointmentSeriesScope(
     for (const row of rows) {
       const newStart = row.start_time + timeDelta;
       const newDuration = input.durationMinutes ?? row.duration_minutes;
+      const timeChanged = timeDelta !== 0 || newDuration !== row.duration_minutes;
       deps.db.prepare(`
         UPDATE appointments SET
           patient_name = COALESCE(?, patient_name),
@@ -337,7 +420,7 @@ export function updateAppointmentSeriesScope(
         input.notes ?? null,
         input.flaggedNotes !== undefined ? 1 : 0,
         input.flaggedNotes ? 1 : 0,
-        timeDelta !== 0 || input.durationMinutes ? 1 : 0,
+        timeChanged ? 1 : 0,
         now,
         row.id
       );

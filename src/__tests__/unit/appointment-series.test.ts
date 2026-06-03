@@ -199,6 +199,39 @@ describe("updateAppointmentSeriesScope", () => {
     });
   });
 
+  it("rejects a conflicting single moved occurrence unless force is true", () => {
+    const db = createTestDb();
+    const start = Date.parse("2026-06-03T07:00:00.000Z");
+    const movedStart = start + 7 * 86_400_000 + 60 * 60_000;
+    seedSeries(db, start);
+
+    db.prepare(`
+      INSERT INTO appointments (id, patient_name, start_time, end_time, duration_minutes, status, created_at, updated_at)
+      VALUES ('outside-single', 'Grace Hopper', ?, ?, 30, 'CONFIRMED', 1, 1)
+    `).run(movedStart + 15 * 60_000, movedStart + 45 * 60_000);
+
+    const deps = { db, now: () => 2, uuid: () => "unused", syncPatient: () => "patient-1", updatePatientContact: () => undefined };
+
+    expect(() => updateAppointmentSeriesScope(
+      "appt-1",
+      "single",
+      { startTime: movedStart, durationMinutes: 45 },
+      deps
+    )).toThrow("Zeitkonflikt: 1 Konflikte gefunden");
+
+    updateAppointmentSeriesScope(
+      "appt-1",
+      "single",
+      { startTime: movedStart, durationMinutes: 45, force: true },
+      deps
+    );
+
+    expect(db.prepare("SELECT start_time, duration_minutes FROM appointments WHERE id = 'appt-1'").get()).toEqual({
+      start_time: movedStart,
+      duration_minutes: 45,
+    });
+  });
+
   it("splits future occurrences into a new series before applying future changes", () => {
     const db = createTestDb();
     const start = Date.parse("2026-06-03T07:00:00.000Z");
@@ -220,6 +253,39 @@ describe("updateAppointmentSeriesScope", () => {
       { id: "appt-1", series_id: "series-1", series_occurrence_index: 1, start_time: start + 7 * 86_400_000 },
       { id: "appt-2", series_id: "series-2", series_occurrence_index: 0, start_time: start + 14 * 86_400_000 + 60 * 60_000 },
       { id: "appt-3", series_id: "series-2", series_occurrence_index: 1, start_time: start + 21 * 86_400_000 + 60 * 60_000 },
+    ]);
+  });
+
+  it("rejects a conflicting future shift outside the updated set unless force is true", () => {
+    const db = createTestDb();
+    const start = Date.parse("2026-06-03T07:00:00.000Z");
+    const shiftedStart = start + 21 * 86_400_000 + 60 * 60_000;
+    seedSeries(db, start);
+
+    db.prepare(`
+      INSERT INTO appointments (id, patient_name, start_time, end_time, duration_minutes, status, created_at, updated_at)
+      VALUES ('outside-future', 'Grace Hopper', ?, ?, 30, 'REQUESTED', 1, 1)
+    `).run(shiftedStart + 10 * 60_000, shiftedStart + 40 * 60_000);
+
+    expect(() => updateAppointmentSeriesScope(
+      "appt-2",
+      "future",
+      { startTime: start + 14 * 86_400_000 + 60 * 60_000 },
+      { db, now: () => 2, uuid: () => "series-2", syncPatient: () => "patient-1", updatePatientContact: () => undefined }
+    )).toThrow("Zeitkonflikt: 1 Konflikte gefunden");
+
+    expect(db.prepare("SELECT COUNT(*) as count FROM appointment_series").get()).toEqual({ count: 1 });
+
+    updateAppointmentSeriesScope(
+      "appt-2",
+      "future",
+      { startTime: start + 14 * 86_400_000 + 60 * 60_000, force: true },
+      { db, now: () => 2, uuid: () => "series-2", syncPatient: () => "patient-1", updatePatientContact: () => undefined }
+    );
+
+    expect(db.prepare("SELECT id, series_id, start_time FROM appointments WHERE id IN ('appt-2', 'appt-3') ORDER BY id").all()).toEqual([
+      { id: "appt-2", series_id: "series-2", start_time: start + 14 * 86_400_000 + 60 * 60_000 },
+      { id: "appt-3", series_id: "series-2", start_time: shiftedStart },
     ]);
   });
 });
