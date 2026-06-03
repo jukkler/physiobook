@@ -172,6 +172,7 @@ Termine werden ueber diese Routen verwaltet:
 - `GET /api/appointments/[id]`
 - `PATCH /api/appointments/[id]?scope=single|future|series`
 - `DELETE /api/appointments/[id]?scope=single|future|series`
+- `POST /api/appointments/[id]/email`
 - `DELETE /api/appointments/bulk`
 
 Wichtige Logik:
@@ -267,6 +268,8 @@ Cron fuehrt nacheinander aus:
 - Auto-Archiv: `src/lib/cron/auto-archive.ts`
 
 Der Cron-Endpoint ist oeffentlich erreichbar, aber ueber `Authorization: Bearer <CRON_SECRET>` geschuetzt.
+
+Manuell aus dem Kalender versendete Termin-E-Mails nutzen direkten SMTP-Versand ueber `src/lib/appointment-email.ts`. Dadurch kann das Terminformular sofort Erfolg oder SMTP-/Validierungsfehler anzeigen.
 
 ## PDF-Archiv und Import
 
