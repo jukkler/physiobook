@@ -6,6 +6,17 @@ import {
   summarizeInterval,
 } from "@/lib/series-rules";
 
+function expectExactErrorMessage(action: () => unknown, expectedMessage: string) {
+  try {
+    action();
+  } catch (error) {
+    expect((error as Error).message).toBe(expectedMessage);
+    return;
+  }
+
+  throw new Error(`Expected error with message: ${expectedMessage}`);
+}
+
 describe("generateSeriesOccurrences", () => {
   it("generates weekly occurrences from the selected start time", () => {
     const start = Date.parse("2026-06-03T07:00:00.000Z");
@@ -18,13 +29,22 @@ describe("generateSeriesOccurrences", () => {
 
   it("rejects unsupported interval values", () => {
     const start = Date.parse("2026-06-03T07:00:00.000Z");
-    expect(() => generateSeriesOccurrences({ startTime: start, durationMinutes: 30, count: 3, intervalWeeks: 5 })).toThrow("intervalWeeks must be 1, 2, 3, or 4");
+    expectExactErrorMessage(
+      () => generateSeriesOccurrences({ startTime: start, durationMinutes: 30, count: 3, intervalWeeks: 5 }),
+      "intervalWeeks must be 1, 2, 3, or 4",
+    );
   });
 
   it("rejects counts outside the supported appointment series range", () => {
     const start = Date.parse("2026-06-03T07:00:00.000Z");
-    expect(() => generateSeriesOccurrences({ startTime: start, durationMinutes: 30, count: 0, intervalWeeks: 1 })).toThrow("count must be between 1 and 52");
-    expect(() => generateSeriesOccurrences({ startTime: start, durationMinutes: 30, count: 53, intervalWeeks: 1 })).toThrow("count must be between 1 and 52");
+    expectExactErrorMessage(
+      () => generateSeriesOccurrences({ startTime: start, durationMinutes: 30, count: 0, intervalWeeks: 1 }),
+      "count must be between 1 and 52",
+    );
+    expectExactErrorMessage(
+      () => generateSeriesOccurrences({ startTime: start, durationMinutes: 30, count: 53, intervalWeeks: 1 }),
+      "count must be between 1 and 52",
+    );
   });
 });
 
@@ -51,7 +71,10 @@ describe("normalizeSeriesScope", () => {
   });
 
   it("rejects unknown scopes", () => {
-    expect(() => normalizeSeriesScope("all")).toThrow("scope muss 'single', 'future' oder 'series' sein");
+    expectExactErrorMessage(
+      () => normalizeSeriesScope("all"),
+      "scope muss 'single', 'future' oder 'series' sein",
+    );
   });
 });
 
