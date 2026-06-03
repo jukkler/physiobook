@@ -93,7 +93,7 @@ export default function SeriesFields({
             <ul className="space-y-1">
               {preview.map((item, index) => (
                 <li key={index}>
-                  {formatBerlinDate(item.start).split(",")[0]} {formatBerlinTime(item.start)}-{formatBerlinTime(item.end)}
+                  {formatBerlinDate(item.start)} {formatBerlinTime(item.start)}-{formatBerlinTime(item.end)}
                 </li>
               ))}
             </ul>
