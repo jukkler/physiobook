@@ -6,7 +6,6 @@ import { withApiAuth } from "@/lib/auth";
 import { checkCsrf } from "@/lib/csrf";
 import { getConflictDetails } from "@/lib/overlap";
 import { filterNotes } from "@/lib/notes-filter";
-import { detectAndGroupSeries } from "@/lib/series-detect";
 import { AppointmentSeriesConflictError, createAppointmentSeries } from "@/lib/appointment-series";
 
 // GET /api/appointments?from=<epochMs>&to=<epochMs>
@@ -191,6 +190,5 @@ export const POST = withApiAuth(async (req) => {
       now, now
     );
 
-  detectAndGroupSeries(patientName);
   return Response.json({ id }, { status: 201 });
 });

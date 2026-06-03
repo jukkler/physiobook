@@ -12,8 +12,8 @@ interface Candidate {
 }
 
 /**
- * Detect and group series for a single patient.
- * Finds 3+ ungrouped appointments at the same weekday+time with regular intervals.
+ * Detect and group legacy series for a single patient.
+ * This is an explicit admin migration utility, not part of normal appointment saves.
  */
 export function detectAndGroupSeries(patientName: string): void {
   const db = getDb();
