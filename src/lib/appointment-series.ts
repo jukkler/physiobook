@@ -72,6 +72,10 @@ export function defaultAppointmentSeriesDeps(): AppointmentSeriesServiceDeps {
   };
 }
 
+function isConflictParticipatingStatus(status: string | null | undefined): boolean {
+  return status === "CONFIRMED" || status === "REQUESTED";
+}
+
 export function createAppointmentSeries(
   input: CreateAppointmentSeriesInput,
   deps: AppointmentSeriesServiceDeps = defaultAppointmentSeriesDeps()
@@ -300,9 +304,12 @@ export function updateAppointmentSeriesScope(
     const newDuration = input.durationMinutes ?? selected.duration_minutes;
     const newEnd = newStart + newDuration * 60_000;
     const moved = newStart !== selected.start_time || newDuration !== selected.duration_minutes;
+    const activatesConflictParticipation =
+      !isConflictParticipatingStatus(selected.status) &&
+      isConflictParticipatingStatus(input.status ?? selected.status);
     const exceptionType = moved ? "moved" : selected.series_exception_type;
 
-    if (moved && !input.force) {
+    if ((moved || activatesConflictParticipation) && !input.force) {
       assertNoConflictsForProposedTimes(
         deps.db,
         [{ id: appointmentId, start: newStart, end: newEnd }],
@@ -366,8 +373,12 @@ export function updateAppointmentSeriesScope(
   ) as SeriesAppointmentRow[];
   const timeDelta = input.startTime !== undefined ? input.startTime - anchor.start_time : 0;
   const durationChanged = input.durationMinutes !== undefined && rows.some((row) => input.durationMinutes !== row.duration_minutes);
+  const activatesConflictParticipation =
+    input.status !== undefined &&
+    isConflictParticipatingStatus(input.status) &&
+    rows.some((row) => !isConflictParticipatingStatus(row.status));
 
-  if ((timeDelta !== 0 || durationChanged) && !input.force) {
+  if ((timeDelta !== 0 || durationChanged || activatesConflictParticipation) && !input.force) {
     assertNoConflictsForProposedTimes(
       deps.db,
       rows.map((row) => {
@@ -379,10 +390,6 @@ export function updateAppointmentSeriesScope(
     );
   }
 
-  if (scope === "future") {
-    targetSeriesId = deps.db.transaction(() => splitFutureOccurrences(selected, deps))();
-  }
-
   const patientId = input.patientName && input.patientName !== anchor.patient_name
     ? deps.syncPatient(input.patientName, input.contactEmail ?? null, input.contactPhone ?? null, now)
     : anchor.patient_id;
@@ -392,6 +399,10 @@ export function updateAppointmentSeriesScope(
   }
 
   const updateAll = deps.db.transaction(() => {
+    if (scope === "future") {
+      targetSeriesId = splitFutureOccurrences(selected, deps);
+    }
+
     for (const row of rows) {
       const newStart = row.start_time + timeDelta;
       const newDuration = input.durationMinutes ?? row.duration_minutes;

@@ -232,6 +232,78 @@ describe("updateAppointmentSeriesScope", () => {
     });
   });
 
+  it("rejects a conflicting single status activation unless force is true", () => {
+    const db = createTestDb();
+    const start = Date.parse("2026-06-03T07:00:00.000Z");
+    const deps = { db, now: () => 2, uuid: () => "unused", syncPatient: () => "patient-1", updatePatientContact: () => undefined };
+
+    db.prepare(`
+      INSERT INTO appointments (id, patient_name, start_time, end_time, duration_minutes, status, created_at, updated_at)
+      VALUES ('cancelled-single', 'Ada Lovelace', ?, ?, 30, 'CANCELLED', 1, 1)
+    `).run(start, start + 30 * 60_000);
+    db.prepare(`
+      INSERT INTO appointments (id, patient_name, start_time, end_time, duration_minutes, status, created_at, updated_at)
+      VALUES ('outside-single', 'Grace Hopper', ?, ?, 30, 'CONFIRMED', 1, 1)
+    `).run(start + 10 * 60_000, start + 40 * 60_000);
+
+    expect(() => updateAppointmentSeriesScope(
+      "cancelled-single",
+      "single",
+      { status: "CONFIRMED" },
+      deps
+    )).toThrow("Zeitkonflikt: 1 Konflikte gefunden");
+
+    expect(db.prepare("SELECT status FROM appointments WHERE id = 'cancelled-single'").get()).toEqual({
+      status: "CANCELLED",
+    });
+
+    updateAppointmentSeriesScope(
+      "cancelled-single",
+      "single",
+      { status: "CONFIRMED", force: true },
+      deps
+    );
+
+    expect(db.prepare("SELECT status FROM appointments WHERE id = 'cancelled-single'").get()).toEqual({
+      status: "CONFIRMED",
+    });
+  });
+
+  it("rejects a conflicting series status activation unless force is true", () => {
+    const db = createTestDb();
+    const start = Date.parse("2026-06-03T07:00:00.000Z");
+    seedSeries(db, start);
+    db.prepare("UPDATE appointments SET status = 'CANCELLED'").run();
+    db.prepare(`
+      INSERT INTO appointments (id, patient_name, start_time, end_time, duration_minutes, status, created_at, updated_at)
+      VALUES ('outside-series', 'Grace Hopper', ?, ?, 30, 'CONFIRMED', 1, 1)
+    `).run(start + 14 * 86_400_000 + 10 * 60_000, start + 14 * 86_400_000 + 40 * 60_000);
+
+    const deps = { db, now: () => 2, uuid: () => "unused", syncPatient: () => "patient-1", updatePatientContact: () => undefined };
+
+    expect(() => updateAppointmentSeriesScope(
+      "appt-0",
+      "series",
+      { status: "CONFIRMED" },
+      deps
+    )).toThrow("Zeitkonflikt: 1 Konflikte gefunden");
+
+    expect(db.prepare("SELECT DISTINCT status FROM appointments WHERE series_id = 'series-1'").all()).toEqual([
+      { status: "CANCELLED" },
+    ]);
+
+    updateAppointmentSeriesScope(
+      "appt-0",
+      "series",
+      { status: "CONFIRMED", force: true },
+      deps
+    );
+
+    expect(db.prepare("SELECT COUNT(*) as count FROM appointments WHERE series_id = 'series-1' AND status = 'CONFIRMED'").get()).toEqual({
+      count: 4,
+    });
+  });
+
   it("splits future occurrences into a new series before applying future changes", () => {
     const db = createTestDb();
     const start = Date.parse("2026-06-03T07:00:00.000Z");
@@ -287,6 +359,51 @@ describe("updateAppointmentSeriesScope", () => {
       { id: "appt-2", series_id: "series-2", start_time: start + 14 * 86_400_000 + 60 * 60_000 },
       { id: "appt-3", series_id: "series-2", start_time: shiftedStart },
     ]);
+  });
+
+  it("rolls back a future split when the update phase fails", () => {
+    const db = createTestDb();
+    const start = Date.parse("2026-06-03T07:00:00.000Z");
+    seedSeries(db, start);
+    const deps = { db, now: () => 2, uuid: () => "series-2", syncPatient: () => "patient-1", updatePatientContact: () => undefined };
+
+    const originalAppointments = db.prepare(`
+      SELECT id, series_id, series_occurrence_index
+      FROM appointments
+      ORDER BY id
+    `).all();
+    const originalSeries = db.prepare(`
+      SELECT id, occurrence_count
+      FROM appointment_series
+      ORDER BY id
+    `).all();
+
+    db.exec(`
+      CREATE TRIGGER fail_future_status_update
+      BEFORE UPDATE OF status ON appointments
+      WHEN NEW.status = 'EXPIRED'
+      BEGIN
+        SELECT RAISE(ABORT, 'forced appointment update failure');
+      END;
+    `);
+
+    expect(() => updateAppointmentSeriesScope(
+      "appt-2",
+      "future",
+      { status: "EXPIRED" },
+      deps
+    )).toThrow("forced appointment update failure");
+
+    expect(db.prepare(`
+      SELECT id, series_id, series_occurrence_index
+      FROM appointments
+      ORDER BY id
+    `).all()).toEqual(originalAppointments);
+    expect(db.prepare(`
+      SELECT id, occurrence_count
+      FROM appointment_series
+      ORDER BY id
+    `).all()).toEqual(originalSeries);
   });
 });
 
