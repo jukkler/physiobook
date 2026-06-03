@@ -39,6 +39,9 @@ yarn-error.log*
 *.sqlite-wal
 *.sqlite-shm
 
+# local Codex/Superpowers worktrees
+/.worktrees/
+
 # vercel
 .vercel
 

@@ -8,12 +8,16 @@ const MS_PER_DAY = 86_400_000;
 
 interface Candidate {
   id: string;
+  patientId: string | null;
   startTime: number;
+  durationMinutes: number;
+  notes: string | null;
+  createdAt: number;
 }
 
 /**
- * Detect and group series for a single patient.
- * Finds 3+ ungrouped appointments at the same weekday+time with regular intervals.
+ * Detect and group legacy series for a single patient.
+ * This is an explicit admin migration utility, not part of normal appointment saves.
  */
 export function detectAndGroupSeries(patientName: string): void {
   const db = getDb();
@@ -21,7 +25,12 @@ export function detectAndGroupSeries(patientName: string): void {
   // Step 1: Load ungrouped candidates for this patient
   const candidates = db
     .prepare(
-      `SELECT id, start_time as startTime
+      `SELECT id,
+              patient_id as patientId,
+              start_time as startTime,
+              duration_minutes as durationMinutes,
+              notes,
+              created_at as createdAt
        FROM appointments
        WHERE patient_name = ?
          AND series_id IS NULL
@@ -37,7 +46,7 @@ export function detectAndGroupSeries(patientName: string): void {
   for (const c of candidates) {
     const { weekday, minute } = getBerlinWeekdayAndMinute(c.startTime);
     const roundedMinute = Math.round(minute / 5) * 5;
-    const key = `${weekday}-${roundedMinute}`;
+    const key = `${weekday}-${roundedMinute}-${c.durationMinutes}`;
     let bucket = buckets.get(key);
     if (!bucket) {
       bucket = [];
@@ -59,7 +68,7 @@ export function detectAndGroupSeries(patientName: string): void {
     }
 
     // Find contiguous runs with a uniform allowed interval
-    const runs: Candidate[][] = [];
+    const runs: { candidates: Candidate[]; gap: number }[] = [];
     let currentRun: Candidate[] = [bucket[0]];
     let currentGap = gaps[0];
 
@@ -69,7 +78,7 @@ export function detectAndGroupSeries(patientName: string): void {
       } else {
         // End current run, check if it qualifies
         if (currentRun.length >= MIN_RUN_LENGTH && ALLOWED_INTERVALS.includes(currentGap)) {
-          runs.push(currentRun);
+          runs.push({ candidates: currentRun, gap: currentGap });
         }
         currentRun = [bucket[i]];
         currentGap = i < gaps.length ? gaps[i] : 0;
@@ -77,16 +86,53 @@ export function detectAndGroupSeries(patientName: string): void {
     }
     // Don't forget the last run
     if (currentRun.length >= MIN_RUN_LENGTH && ALLOWED_INTERVALS.includes(currentGap)) {
-      runs.push(currentRun);
+      runs.push({ candidates: currentRun, gap: currentGap });
     }
 
-    // Step 4: Assign series_id to each qualifying run
-    for (const run of runs) {
+    // Step 4: Create full appointment_series rows and assign occurrence metadata
+    for (const { candidates: run, gap } of runs) {
       const seriesId = uuidv4();
-      const placeholders = run.map(() => "?").join(",");
-      db.prepare(
-        `UPDATE appointments SET series_id = ?, updated_at = ? WHERE id IN (${placeholders})`
-      ).run(seriesId, now, ...run.map((r) => r.id));
+      const sortedRun = [...run].sort((a, b) => a.startTime - b.startTime);
+      const first = sortedRun[0];
+      const last = sortedRun[sortedRun.length - 1];
+      const intervalWeeks = Math.round(gap / 7);
+
+      db.transaction(() => {
+        db.prepare(
+          `INSERT INTO appointment_series (
+             id, patient_id, patient_name, first_start_time, duration_minutes,
+             interval_weeks, occurrence_count, last_start_time, status, notes,
+             created_at, updated_at
+           )
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?)`
+        ).run(
+          seriesId,
+          first.patientId,
+          patientName,
+          first.startTime,
+          first.durationMinutes,
+          intervalWeeks,
+          sortedRun.length,
+          last.startTime,
+          first.notes,
+          Math.min(...sortedRun.map((r) => r.createdAt)),
+          now
+        );
+
+        const update = db.prepare(
+          `UPDATE appointments
+           SET series_id = ?,
+               series_occurrence_index = ?,
+               series_original_start_time = start_time,
+               series_exception_type = NULL,
+               updated_at = ?
+           WHERE id = ?`
+        );
+
+        sortedRun.forEach((appointment, index) => {
+          update.run(seriesId, index, now, appointment.id);
+        });
+      })();
     }
   }
 }

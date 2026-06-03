@@ -4,9 +4,9 @@ import { isValidDuration } from "@/lib/validation";
 import { syncPatient } from "@/lib/patients";
 import { withApiAuth } from "@/lib/auth";
 import { checkCsrf } from "@/lib/csrf";
-import { getConflictDetails, createBatchConflictChecker, findAppointmentConflicts, findBlockerConflicts, hasOverlap } from "@/lib/overlap";
+import { getConflictDetails } from "@/lib/overlap";
 import { filterNotes } from "@/lib/notes-filter";
-import { detectAndGroupSeries } from "@/lib/series-detect";
+import { AppointmentSeriesConflictError, createAppointmentSeries } from "@/lib/appointment-series";
 
 // GET /api/appointments?from=<epochMs>&to=<epochMs>
 export const GET = withApiAuth(async (req) => {
@@ -23,9 +23,17 @@ export const GET = withApiAuth(async (req) => {
 
   const db = getDb();
   const rows = db.prepare(
-    `SELECT a.*, p.email as contact_email, p.phone as contact_phone
+    `SELECT
+       a.*,
+       p.email as contact_email,
+       p.phone as contact_phone,
+       s.interval_weeks as series_interval_weeks,
+       s.occurrence_count as series_occurrence_count,
+       s.first_start_time as series_first_start_time,
+       s.last_start_time as series_last_start_time
      FROM appointments a
      LEFT JOIN patients p ON p.id = a.patient_id
+     LEFT JOIN appointment_series s ON s.id = a.series_id
      WHERE a.start_time < ? AND a.end_time >= ?`
   ).all(to, from) as Record<string, unknown>[];
 
@@ -45,6 +53,20 @@ export const GET = withApiAuth(async (req) => {
     updatedAt: row.updated_at,
     contactEmail: row.contact_email,
     contactPhone: row.contact_phone,
+    seriesOccurrenceIndex: row.series_occurrence_index,
+    seriesOriginalStartTime: row.series_original_start_time,
+    seriesExceptionType: row.series_exception_type,
+    seriesSummary: row.series_id
+      ? {
+          id: row.series_id,
+          intervalWeeks: row.series_interval_weeks,
+          occurrenceCount: row.series_occurrence_count,
+          firstStartTime: row.series_first_start_time,
+          lastStartTime: row.series_last_start_time,
+          occurrenceIndex: row.series_occurrence_index,
+          exceptionType: row.series_exception_type,
+        }
+      : null,
   }));
 
   return Response.json(results);
@@ -112,81 +134,34 @@ export const POST = withApiAuth(async (req) => {
 
   // Series creation
   if (body.series) {
-    const { dayOfWeek, count, intervalWeeks } = body.series;
+    const { count, intervalWeeks } = body.series;
     const interval = intervalWeeks && [1, 2, 3, 4].includes(intervalWeeks) ? intervalWeeks : 1;
-    if (count < 1 || count > 52) {
-      return Response.json({ error: "Serienanzahl muss zwischen 1 und 52 liegen" }, { status: 400 });
-    }
-
-    const seriesId = uuidv4();
-
-    // Pre-compute all slots
-    const slots: { start: number; end: number }[] = [];
-    let currentDate = new Date(startTime);
-    for (let i = 0; i < count; i++) {
-      if (i > 0) {
-        currentDate.setUTCDate(currentDate.getUTCDate() + 7 * interval);
-      }
-      const slotStart = currentDate.getTime();
-      slots.push({ start: slotStart, end: slotStart + durationMinutes * 60_000 });
-    }
-
-    // Batch conflict check
-    if (!body.force) {
-      const rangeStart = slots[0].start;
-      const rangeEnd = slots[slots.length - 1].end;
-      const existingAppts = findAppointmentConflicts(rangeStart, rangeEnd);
-      const existingBlockers = findBlockerConflicts(rangeStart, rangeEnd);
-
-      const conflictDetails: { name: string; startTime: number; endTime: number; type: "appointment" | "blocker" }[] = [];
-      const seen = new Set<string>();
-
-      for (const slot of slots) {
-        for (const a of existingAppts) {
-          if (hasOverlap(slot.start, slot.end, a.startTime, a.endTime) && !seen.has(a.id)) {
-            seen.add(a.id);
-            conflictDetails.push({ name: a.name || "Unbekannt", startTime: a.startTime, endTime: a.endTime, type: "appointment" });
-          }
-        }
-        for (const b of existingBlockers) {
-          if (hasOverlap(slot.start, slot.end, b.startTime, b.endTime) && !seen.has(b.id)) {
-            seen.add(b.id);
-            conflictDetails.push({ name: b.name || "Blocker", startTime: b.startTime, endTime: b.endTime, type: "blocker" });
-          }
-        }
-      }
-
-      if (conflictDetails.length > 0) {
+    try {
+      const result = createAppointmentSeries({
+        patientName,
+        contactEmail,
+        contactPhone,
+        startTime,
+        durationMinutes,
+        status: appointmentStatus,
+        notes: notes || null,
+        flaggedNotes: notesResult.flagged,
+        intervalWeeks: interval,
+        count,
+        force: body.force,
+      });
+      return Response.json(result, { status: 201 });
+    } catch (error) {
+      if (error instanceof AppointmentSeriesConflictError) {
         return Response.json(
-          { error: `Zeitkonflikt: ${conflictDetails.length} Konflikte gefunden`, conflictDetails },
+          { error: error.message, conflictDetails: error.conflictDetails },
           { status: 409 }
         );
       }
+      const message = error instanceof Error ? error.message : "Fehler beim Erstellen der Serie";
+      const statusCode = message.startsWith("Zeitkonflikt") ? 409 : 400;
+      return Response.json({ error: message }, { status: statusCode });
     }
-
-    const patientId = syncPatient(patientName, contactEmail, contactPhone, now);
-    const created: string[] = [];
-
-    const insertSeries = getDb().transaction(() => {
-      for (const slot of slots) {
-        const id = uuidv4();
-        getDb()
-          .prepare(
-            `INSERT INTO appointments (id, patient_name, patient_id, start_time, end_time, duration_minutes, status, series_id, notes, flagged_notes, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-          )
-          .run(
-            id, patientName, patientId, slot.start, slot.end, durationMinutes,
-            appointmentStatus, seriesId,
-            notes || null, notesResult.flagged ? 1 : 0,
-            now, now
-          );
-        created.push(id);
-      }
-    });
-    insertSeries();
-
-    return Response.json({ seriesId, created }, { status: 201 });
   }
 
   // Single appointment
@@ -215,6 +190,5 @@ export const POST = withApiAuth(async (req) => {
       now, now
     );
 
-  detectAndGroupSeries(patientName);
   return Response.json({ id }, { status: 201 });
 });

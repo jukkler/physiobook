@@ -1,6 +1,6 @@
 "use client";
 
-import { formatBerlinTime } from "@/lib/time";
+import type { AppointmentSeriesSummary } from "@/lib/db/schema";
 
 interface AppointmentCardProps {
   id: string;
@@ -12,6 +12,7 @@ interface AppointmentCardProps {
   contactEmail?: string | null;
   contactPhone?: string | null;
   notes?: string | null;
+  seriesSummary?: AppointmentSeriesSummary | null;
   isLunchTime?: boolean;
   onConfirm?: (id: string) => void;
   onReject?: (id: string) => void;
@@ -25,13 +26,6 @@ const STATUS_COLORS: Record<string, string> = {
   EXPIRED: "bg-gray-100 border-gray-300 text-gray-400",
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  CONFIRMED: "Bestätigt",
-  REQUESTED: "Anfrage",
-  CANCELLED: "Abgesagt",
-  EXPIRED: "Verfallen",
-};
-
 const LUNCH_COLORS: Record<string, string> = {
   CONFIRMED: "bg-teal-100 border-teal-300 text-teal-900",
   REQUESTED: "bg-teal-50 border-teal-200 text-teal-800",
@@ -42,11 +36,9 @@ const LUNCH_COLORS: Record<string, string> = {
 export default function AppointmentCard({
   id,
   patientName,
-  startTime,
-  endTime,
-  durationMinutes,
   status,
   notes,
+  seriesSummary,
   isLunchTime,
   onConfirm,
   onReject,
@@ -63,6 +55,11 @@ export default function AppointmentCard({
       {/* Primary row: always visible */}
       <div className="flex items-center gap-2 min-w-0">
         <span className="font-medium truncate">{patientName}</span>
+        {seriesSummary && (
+          <span className="flex-shrink-0 rounded border border-current px-1 text-[10px] font-semibold leading-4 opacity-80">
+            Serie
+          </span>
+        )}
         {status === "REQUESTED" && (
           <div className="flex gap-1 flex-shrink-0">
             <button

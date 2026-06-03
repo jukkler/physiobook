@@ -3,7 +3,11 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { epochToDateInput, epochToTimeInput, dateTimeToEpoch, formatBerlinDate, formatBerlinTime } from "@/lib/time";
 import { PRAXIS } from "@/lib/constants";
-import type { Appointment, AppointmentWithContact } from "@/lib/db/schema";
+import { isValidEmail } from "@/lib/validation";
+import type { Appointment, AppointmentSeriesScope, AppointmentWithContact } from "@/lib/db/schema";
+import SeriesFields from "@/components/forms/SeriesFields";
+import SeriesScopeDialog from "@/components/forms/SeriesScopeDialog";
+import SeriesSummary from "@/components/forms/SeriesSummary";
 
 interface PatientSuggestion {
   id: string;
@@ -48,8 +52,10 @@ export default function AppointmentForm({
   const [status, setStatus] = useState(appointment?.status ?? "CONFIRMED");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailMessage, setEmailMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [editScope, setEditScope] = useState<"single" | "series">("single");
+  const [pendingScopeAction, setPendingScopeAction] = useState<"save" | "delete" | null>(null);
   const [showConflict, setShowConflict] = useState(false);
   const [conflictMessage, setConflictMessage] = useState("");
   const [conflictDetails, setConflictDetails] = useState<{ name: string; startTime: number; endTime: number; type: string }[]>([]);
@@ -58,6 +64,7 @@ export default function AppointmentForm({
   const [seriesCount, setSeriesCount] = useState(6);
   const [seriesInterval, setSeriesInterval] = useState(1);
   const [isPermanent, setIsPermanent] = useState(false);
+  const canSendEmail = isEdit && !!contactEmail && isValidEmail(contactEmail);
 
   // Autocomplete
   const [suggestions, setSuggestions] = useState<PatientSuggestion[]>([]);
@@ -111,33 +118,36 @@ export default function AppointmentForm({
     }
   }, [showSuggestions]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  function buildPayload() {
+    const startTimeMs = dateTimeToEpoch(date, time);
+    const payload: Record<string, unknown> = {
+      patientName,
+      patientId: patientId || undefined,
+      startTime: startTimeMs,
+      durationMinutes: duration,
+      contactEmail: contactEmail || null,
+      contactPhone: contactPhone || null,
+      notes: notes || undefined,
+      status,
+    };
+
+    if (!isEdit && isSeries) {
+      payload.series = {
+        count: isPermanent ? 52 : seriesCount,
+        intervalWeeks: seriesInterval,
+      };
+    }
+
+    return payload;
+  }
+
+  async function submitWithScope(scope: AppointmentSeriesScope | null) {
     setError("");
     setSaving(true);
-
     try {
-      const startTimeMs = dateTimeToEpoch(date, time);
-
-      const payload: Record<string, unknown> = {
-        patientName,
-        patientId: patientId || undefined,
-        startTime: startTimeMs,
-        durationMinutes: duration,
-        contactEmail: contactEmail || null,
-        contactPhone: contactPhone || null,
-        notes: notes || undefined,
-        status,
-      };
-
-      if (!isEdit && isSeries) {
-        const dayOfWeek = new Date(startTimeMs).getUTCDay();
-        const count = isPermanent ? 52 : seriesCount;
-        payload.series = { dayOfWeek, count, intervalWeeks: seriesInterval };
-      }
-
-      const scopeParam = isEdit && appointment.seriesId && editScope === "series" ? "?scope=series" : "";
-      const url = isEdit ? `/api/appointments/${appointment.id}${scopeParam}` : "/api/appointments";
+      const payload = buildPayload();
+      const scopeParam = isEdit && appointment?.seriesId && scope ? `?scope=${scope}` : "";
+      const url = isEdit ? `/api/appointments/${appointment!.id}${scopeParam}` : "/api/appointments";
       const method = isEdit ? "PATCH" : "POST";
 
       const res = await fetch(url, {
@@ -147,7 +157,6 @@ export default function AppointmentForm({
       });
 
       if (res.status === 409) {
-        // Conflict — ask user whether to force or cancel
         const data = await res.json();
         setConflictMessage(data.error || "Dieser Zeitraum ist bereits belegt.");
         setConflictDetails(data.conflictDetails || []);
@@ -170,7 +179,17 @@ export default function AppointmentForm({
     }
   }
 
-  async function handleDelete(scope: "single" | "series") {
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (isEdit && appointment?.seriesId) {
+      setPendingScopeAction("save");
+      return;
+    }
+
+    await submitWithScope(null);
+  }
+
+  async function handleDelete(scope: AppointmentSeriesScope) {
     setSaving(true);
     try {
       const res = await fetch(`/api/appointments/${appointment!.id}?scope=${scope}`, {
@@ -276,6 +295,41 @@ export default function AppointmentForm({
     }
   }
 
+  async function handleSendAppointmentEmail() {
+    if (!appointment) return;
+
+    setEmailSending(true);
+    setEmailMessage(null);
+    setError("");
+
+    try {
+      const res = await fetch(`/api/appointments/${appointment.id}/email`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => ({} as { error?: string; to?: string }));
+
+      if (!res.ok) {
+        setEmailMessage({
+          type: "error",
+          text: data.error || "E-Mail konnte nicht gesendet werden",
+        });
+        return;
+      }
+
+      setEmailMessage({
+        type: "success",
+        text: `E-Mail wurde an ${data.to} gesendet.`,
+      });
+    } catch {
+      setEmailMessage({
+        type: "error",
+        text: "Netzwerkfehler beim Senden der E-Mail",
+      });
+    } finally {
+      setEmailSending(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
@@ -296,6 +350,22 @@ export default function AppointmentForm({
             <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">
               {error}
             </div>
+          )}
+
+          {emailMessage && (
+            <div
+              className={`text-sm border rounded p-2 ${
+                emailMessage.type === "success"
+                  ? "text-green-700 bg-green-50 border-green-200"
+                  : "text-red-700 bg-red-50 border-red-200"
+              }`}
+            >
+              {emailMessage.text}
+            </div>
+          )}
+
+          {isEdit && appointment.seriesSummary && (
+            <SeriesSummary summary={appointment.seriesSummary} />
           )}
 
           <div className="relative" ref={suggestionsRef}>
@@ -376,64 +446,18 @@ export default function AppointmentForm({
           </div>
 
           {!isEdit && (
-            <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isSeries}
-                  onChange={(e) => setIsSeries(e.target.checked)}
-                  className="rounded"
-                />
-                Serientermin (wiederholen)
-              </label>
-              {isSeries && (
-                <div className="mt-2 space-y-2">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Intervall
-                    </label>
-                    <select
-                      value={seriesInterval}
-                      onChange={(e) => setSeriesInterval(Number(e.target.value))}
-                      className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value={1}>Wöchentlich</option>
-                      <option value={2}>Alle 2 Wochen</option>
-                      <option value={3}>Alle 3 Wochen</option>
-                      <option value={4}>Alle 4 Wochen</option>
-                    </select>
-                  </div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isPermanent}
-                      onChange={(e) => setIsPermanent(e.target.checked)}
-                      className="rounded"
-                    />
-                    Dauerpatient
-                  </label>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Anzahl Termine
-                    </label>
-                    <input
-                      type="number"
-                      min={2}
-                      max={52}
-                      value={isPermanent ? 52 : seriesCount}
-                      onChange={(e) => setSeriesCount(Math.max(2, Math.min(52, Number(e.target.value))))}
-                      disabled={isPermanent}
-                      className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isPermanent ? "bg-gray-100 text-gray-400 cursor-not-allowed" : ""}`}
-                    />
-                  </div>
-                  <p className="text-xs text-gray-400">
-                    {isPermanent
-                      ? `Erstellt 52 Termine ${seriesInterval === 1 ? "im wöchentlichen Abstand" : `alle ${seriesInterval} Wochen`} (1 Jahr)`
-                      : `Erstellt ${seriesCount} Termine ${seriesInterval === 1 ? "im wöchentlichen Abstand" : `alle ${seriesInterval} Wochen`}`}
-                  </p>
-                </div>
-              )}
-            </div>
+            <SeriesFields
+              enabled={isSeries}
+              onEnabledChange={setIsSeries}
+              intervalWeeks={seriesInterval}
+              onIntervalWeeksChange={setSeriesInterval}
+              count={seriesCount}
+              onCountChange={setSeriesCount}
+              permanent={isPermanent}
+              onPermanentChange={setIsPermanent}
+              startTime={dateTimeToEpoch(date, time)}
+              durationMinutes={duration}
+            />
           )}
 
           {isEdit && (
@@ -494,32 +518,6 @@ export default function AppointmentForm({
             <span className="text-xs text-gray-400">{notes.length}/200</span>
           </div>
 
-          {isEdit && appointment.seriesId && (
-            <div className="bg-gray-50 rounded p-3 space-y-2">
-              <p className="text-xs text-gray-500">Dieser Termin gehört zu einer Serie.</p>
-              <div className="space-y-1">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    name="editScope"
-                    checked={editScope === "single"}
-                    onChange={() => setEditScope("single")}
-                  />
-                  <span className="text-gray-700">Nur diesen Termin ändern</span>
-                </label>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    name="editScope"
-                    checked={editScope === "series"}
-                    onChange={() => setEditScope("series")}
-                  />
-                  <span className="text-gray-700">Alle Termine der Serie ändern</span>
-                </label>
-              </div>
-            </div>
-          )}
-
           <div className="grid grid-cols-3 gap-2 pt-2">
             <button
               type="submit"
@@ -542,8 +540,11 @@ export default function AppointmentForm({
                 <button
                   type="button"
                   onClick={() => {
-                    const scope = appointment?.seriesId ? editScope : "single";
-                    handleDelete(scope);
+                    if (appointment?.seriesId) {
+                      setPendingScopeAction("delete");
+                    } else {
+                      handleDelete("single");
+                    }
                   }}
                   disabled={saving}
                   className="px-4 py-2 bg-red-800 text-white text-sm font-medium rounded-md hover:bg-red-900 disabled:opacity-50"
@@ -555,14 +556,14 @@ export default function AppointmentForm({
             <button
               type="button"
               onClick={() => { onClose(); setShowDeleteConfirm(false); }}
-              className="px-4 py-2 border text-sm rounded-md hover:bg-gray-50"
+              className="px-4 py-2 border border-gray-400 bg-white text-gray-800 text-sm font-medium rounded-md hover:bg-gray-100 hover:border-gray-500 disabled:opacity-50"
             >
               Abbrechen
             </button>
           </div>
 
           {isEdit && (
-            <div className="grid grid-cols-2 gap-2 pt-1">
+            <div className="grid grid-cols-3 gap-2 pt-1">
               {onShowPatient && patientId && (
                 <button
                   type="button"
@@ -582,6 +583,15 @@ export default function AppointmentForm({
               )}
               <button
                 type="button"
+                onClick={handleSendAppointmentEmail}
+                disabled={emailSending || !canSendEmail}
+                title={!contactEmail ? "Keine E-Mail-Adresse hinterlegt" : !isValidEmail(contactEmail) ? "Keine gültige E-Mail-Adresse hinterlegt" : "Termin per E-Mail an Patienten senden"}
+                className="px-4 py-2 text-sm text-gray-700 border border-dashed border-gray-400 rounded-md hover:bg-gray-50 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {emailSending ? "Senden..." : "E-Mail senden"}
+              </button>
+              <button
+                type="button"
                 onClick={handlePrint}
                 className="px-4 py-2 text-sm text-gray-600 border border-dashed rounded-md hover:bg-gray-50 hover:text-gray-900"
               >
@@ -592,6 +602,26 @@ export default function AppointmentForm({
         </form>
       </div>
 
+      {pendingScopeAction && (
+        <SeriesScopeDialog
+          mode={pendingScopeAction}
+          saving={saving}
+          onCancel={() => {
+            setPendingScopeAction(null);
+            setShowDeleteConfirm(false);
+          }}
+          onChoose={(scope) => {
+            const action = pendingScopeAction;
+            setPendingScopeAction(null);
+            if (action === "delete") {
+              handleDelete(scope);
+            } else {
+              submitWithScope(scope);
+            }
+          }}
+        />
+      )}
+
       {showConflict && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-sm">
@@ -600,7 +630,7 @@ export default function AppointmentForm({
             </div>
             <div className="p-4 space-y-3">
               <p className="text-sm text-gray-700">
-                {conflictMessage || "Dieser Zeitraum ist bereits belegt."} Trotzdem speichern?
+                {conflictMessage || "Ein oder mehrere Termine überschneiden sich."} Du kannst abbrechen oder trotzdem speichern.
               </p>
               {conflictDetails.length > 0 && (
                 <div className="max-h-40 overflow-y-auto space-y-1">
@@ -613,7 +643,7 @@ export default function AppointmentForm({
                     </div>
                   ))}
                   {conflictDetails.length > 10 && (
-                    <p className="text-xs text-gray-500">+ {conflictDetails.length - 10} weitere Konflikte</p>
+                    <p className="text-xs text-gray-500">+ {conflictDetails.length - 10} weitere Konflikte in dieser Serie</p>
                   )}
                 </div>
               )}

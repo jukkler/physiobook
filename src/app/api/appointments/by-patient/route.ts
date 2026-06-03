@@ -23,7 +23,8 @@ export const GET = withApiAuth(async (req) => {
   // Get all appointments for this patient
   const rows = db.prepare(
     `SELECT id, patient_name, patient_id, start_time, end_time, duration_minutes,
-            status, series_id, notes, flagged_notes, reminder_sent, created_at, updated_at
+            status, series_id, series_occurrence_index, series_original_start_time,
+            series_exception_type, notes, flagged_notes, reminder_sent, created_at, updated_at
      FROM appointments
      WHERE patient_id = ?
      ORDER BY start_time DESC`
@@ -38,6 +39,9 @@ export const GET = withApiAuth(async (req) => {
     durationMinutes: r.duration_minutes,
     status: r.status,
     seriesId: r.series_id,
+    seriesOccurrenceIndex: r.series_occurrence_index,
+    seriesOriginalStartTime: r.series_original_start_time,
+    seriesExceptionType: r.series_exception_type,
     notes: r.notes,
     flaggedNotes: r.flagged_notes,
     reminderSent: r.reminder_sent,

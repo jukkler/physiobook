@@ -16,6 +16,11 @@ export const appointments = sqliteTable(
       enum: ["REQUESTED", "CONFIRMED", "CANCELLED", "EXPIRED"],
     }).notNull(),
     seriesId: text("series_id"),
+    seriesOccurrenceIndex: integer("series_occurrence_index"),
+    seriesOriginalStartTime: integer("series_original_start_time"),
+    seriesExceptionType: text("series_exception_type", {
+      enum: ["moved", "cancelled", "detached"],
+    }),
     notes: text("notes"), // admin-only, max 200 chars, server-filtered
     flaggedNotes: integer("flagged_notes").notNull().default(0),
     reminderSent: integer("reminder_sent").notNull().default(0), // 0 or 1
@@ -29,12 +34,38 @@ export const appointments = sqliteTable(
       table.status
     ),
     index("idx_appointments_series").on(table.seriesId),
+    index("idx_appointments_series_index").on(table.seriesId, table.seriesOccurrenceIndex),
+    index("idx_appointments_series_original_start").on(table.seriesId, table.seriesOriginalStartTime),
     index("idx_appointments_patient_series").on(table.patientName, table.seriesId),
     index("idx_appointments_created_status").on(
       table.createdAt,
       table.status
     ),
     index("idx_appointments_patient_id").on(table.patientId),
+  ]
+);
+
+// --- Appointment Series ---
+
+export const appointmentSeries = sqliteTable(
+  "appointment_series",
+  {
+    id: text("id").primaryKey(),
+    patientId: text("patient_id"),
+    patientName: text("patient_name").notNull(),
+    firstStartTime: integer("first_start_time").notNull(),
+    durationMinutes: integer("duration_minutes").notNull(),
+    intervalWeeks: integer("interval_weeks").notNull(),
+    occurrenceCount: integer("occurrence_count").notNull(),
+    lastStartTime: integer("last_start_time").notNull(),
+    status: text("status", { enum: ["ACTIVE", "CANCELLED"] }).notNull().default("ACTIVE"),
+    notes: text("notes"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    index("idx_appointment_series_patient").on(table.patientId, table.status),
+    index("idx_appointment_series_time").on(table.firstStartTime, table.lastStartTime),
   ]
 );
 
@@ -134,10 +165,27 @@ export const patients = sqliteTable(
 // --- Type exports ---
 
 export type Appointment = typeof appointments.$inferSelect;
+export type AppointmentSeries = typeof appointmentSeries.$inferSelect;
+export type NewAppointmentSeries = typeof appointmentSeries.$inferInsert;
+export type AppointmentSeriesStatus = "ACTIVE" | "CANCELLED";
+export type AppointmentSeriesExceptionType = "moved" | "cancelled" | "detached";
+export type AppointmentSeriesScope = "single" | "future" | "series";
+
+export interface AppointmentSeriesSummary {
+  id: string;
+  intervalWeeks: number;
+  occurrenceCount: number;
+  firstStartTime: number;
+  lastStartTime: number;
+  occurrenceIndex: number | null;
+  exceptionType: AppointmentSeriesExceptionType | null;
+}
+
 /** Appointment joined with patient contact info for API responses */
 export interface AppointmentWithContact extends Appointment {
   contactEmail: string | null;
   contactPhone: string | null;
+  seriesSummary?: AppointmentSeriesSummary | null;
 }
 export type NewAppointment = typeof appointments.$inferInsert;
 export type Blocker = typeof blockers.$inferSelect;
