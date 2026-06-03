@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { epochToDateInput, epochToTimeInput, dateTimeToEpoch, formatBerlinDate, formatBerlinTime } from "@/lib/time";
 import { PRAXIS } from "@/lib/constants";
+import { isValidEmail } from "@/lib/validation";
 import type { Appointment, AppointmentSeriesScope, AppointmentWithContact } from "@/lib/db/schema";
 import SeriesFields from "@/components/forms/SeriesFields";
 import SeriesScopeDialog from "@/components/forms/SeriesScopeDialog";
@@ -51,6 +52,8 @@ export default function AppointmentForm({
   const [status, setStatus] = useState(appointment?.status ?? "CONFIRMED");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailMessage, setEmailMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [pendingScopeAction, setPendingScopeAction] = useState<"save" | "delete" | null>(null);
   const [showConflict, setShowConflict] = useState(false);
@@ -61,6 +64,7 @@ export default function AppointmentForm({
   const [seriesCount, setSeriesCount] = useState(6);
   const [seriesInterval, setSeriesInterval] = useState(1);
   const [isPermanent, setIsPermanent] = useState(false);
+  const canSendEmail = isEdit && !!contactEmail && isValidEmail(contactEmail);
 
   // Autocomplete
   const [suggestions, setSuggestions] = useState<PatientSuggestion[]>([]);
@@ -291,6 +295,41 @@ export default function AppointmentForm({
     }
   }
 
+  async function handleSendAppointmentEmail() {
+    if (!appointment) return;
+
+    setEmailSending(true);
+    setEmailMessage(null);
+    setError("");
+
+    try {
+      const res = await fetch(`/api/appointments/${appointment.id}/email`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => ({} as { error?: string; to?: string }));
+
+      if (!res.ok) {
+        setEmailMessage({
+          type: "error",
+          text: data.error || "E-Mail konnte nicht gesendet werden",
+        });
+        return;
+      }
+
+      setEmailMessage({
+        type: "success",
+        text: `E-Mail wurde an ${data.to} gesendet.`,
+      });
+    } catch {
+      setEmailMessage({
+        type: "error",
+        text: "Netzwerkfehler beim Senden der E-Mail",
+      });
+    } finally {
+      setEmailSending(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
@@ -310,6 +349,18 @@ export default function AppointmentForm({
           {error && (
             <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">
               {error}
+            </div>
+          )}
+
+          {emailMessage && (
+            <div
+              className={`text-sm border rounded p-2 ${
+                emailMessage.type === "success"
+                  ? "text-green-700 bg-green-50 border-green-200"
+                  : "text-red-700 bg-red-50 border-red-200"
+              }`}
+            >
+              {emailMessage.text}
             </div>
           )}
 
@@ -512,7 +563,7 @@ export default function AppointmentForm({
           </div>
 
           {isEdit && (
-            <div className="grid grid-cols-2 gap-2 pt-1">
+            <div className="grid grid-cols-3 gap-2 pt-1">
               {onShowPatient && patientId && (
                 <button
                   type="button"
@@ -530,6 +581,15 @@ export default function AppointmentForm({
                   Alle Termine
                 </button>
               )}
+              <button
+                type="button"
+                onClick={handleSendAppointmentEmail}
+                disabled={emailSending || !canSendEmail}
+                title={!contactEmail ? "Keine E-Mail-Adresse hinterlegt" : !isValidEmail(contactEmail) ? "Keine gültige E-Mail-Adresse hinterlegt" : "Termin per E-Mail an Patienten senden"}
+                className="px-4 py-2 text-sm text-gray-700 border border-dashed border-gray-400 rounded-md hover:bg-gray-50 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {emailSending ? "Senden..." : "E-Mail senden"}
+              </button>
               <button
                 type="button"
                 onClick={handlePrint}

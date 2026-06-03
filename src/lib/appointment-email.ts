@@ -2,6 +2,7 @@ import type Database from "better-sqlite3";
 import { escapeHtml } from "@/lib/html";
 import { formatBerlinDate, formatBerlinTime } from "@/lib/time";
 import { sendHtmlEmail as defaultSendHtmlEmail } from "@/lib/email";
+import { isValidEmail } from "@/lib/validation";
 
 type SendHtmlEmail = (
   to: string,
@@ -73,6 +74,10 @@ export async function sendAppointmentEmail({
 
   if (!row.contact_email) {
     return { ok: false, status: 400, error: "Für diesen Patienten ist keine E-Mail-Adresse hinterlegt" };
+  }
+
+  if (!isValidEmail(row.contact_email)) {
+    return { ok: false, status: 400, error: "Für diesen Patienten ist keine gültige E-Mail-Adresse hinterlegt" };
   }
 
   const result = await sendHtmlEmail(

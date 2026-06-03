@@ -106,4 +106,26 @@ describe("sendAppointmentEmail", () => {
     expect(result).toEqual({ ok: false, status: 400, error: "Für diesen Patienten ist keine E-Mail-Adresse hinterlegt" });
     expect(send).not.toHaveBeenCalled();
   });
+
+  it("returns 400 when patient email is invalid", async () => {
+    db.prepare(
+      "INSERT INTO patients (id, name, email, phone, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
+    ).run("patient-1", "Dunkel", "patient@example.de, 0170", "0170", 1, 1);
+    db.prepare(
+      `INSERT INTO appointments (
+         id, patient_name, patient_id, start_time, end_time, duration_minutes,
+         status, notes, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run("appt-1", "Dunkel", "patient-1", start, start + 30 * 60_000, 30, "CONFIRMED", null, 1, 1);
+
+    const result = await sendAppointmentEmail({
+      db,
+      appointmentId: "appt-1",
+      sendHtmlEmail: send,
+      now: () => 123,
+    });
+
+    expect(result).toEqual({ ok: false, status: 400, error: "Für diesen Patienten ist keine gültige E-Mail-Adresse hinterlegt" });
+    expect(send).not.toHaveBeenCalled();
+  });
 });
