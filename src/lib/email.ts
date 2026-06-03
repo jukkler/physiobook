@@ -124,6 +124,35 @@ export async function sendEmailWithAttachment(
 }
 
 /**
+ * Send one HTML email directly via SMTP.
+ * Used for admin-triggered one-off patient emails where immediate feedback matters.
+ */
+export async function sendHtmlEmail(
+  to: string,
+  subject: string,
+  html: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const smtpConfig = getSmtpConfig();
+  if (!smtpConfig) {
+    return { ok: false, error: "SMTP ist nicht konfiguriert" };
+  }
+
+  const mailer = createTransporter(smtpConfig);
+  try {
+    await mailer.sendMail({
+      from: smtpConfig.from,
+      to,
+      subject: subject.replace(/[\r\n]/g, ""),
+      html,
+    });
+    return { ok: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unbekannter Fehler";
+    return { ok: false, error: message };
+  }
+}
+
+/**
  * Send a test email directly (not via outbox queue).
  */
 export async function sendTestEmail(to: string): Promise<{ ok: true } | { ok: false; error: string }> {
