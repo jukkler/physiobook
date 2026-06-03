@@ -41,6 +41,19 @@ export interface UpdateAppointmentSeriesInput {
   force?: boolean;
 }
 
+export interface AppointmentSeriesConflictDetail {
+  name: string;
+  startTime: number;
+  endTime: number;
+  type: "appointment" | "blocker";
+}
+
+export class AppointmentSeriesConflictError extends Error {
+  constructor(public readonly conflictDetails: AppointmentSeriesConflictDetail[]) {
+    super(`Zeitkonflikt: ${conflictDetails.length} Konflikte gefunden`);
+  }
+}
+
 interface SeriesAppointmentRow {
   id: string;
   patient_name: string;
@@ -104,17 +117,31 @@ export function createAppointmentSeries(
         AND end_time > ?
     `).all(rangeEnd, rangeStart) as { id: string; name: string; startTime: number; endTime: number }[];
 
-    const conflicts = new Set<string>();
+    const conflicts = new Map<string, AppointmentSeriesConflictDetail>();
     for (const occurrence of occurrences) {
       for (const appointment of existingAppointments) {
-        if (hasOverlap(occurrence.start, occurrence.end, appointment.startTime, appointment.endTime)) conflicts.add(appointment.id);
+        if (hasOverlap(occurrence.start, occurrence.end, appointment.startTime, appointment.endTime)) {
+          conflicts.set(`appointment:${appointment.id}`, {
+            name: appointment.name || "Unbekannt",
+            startTime: appointment.startTime,
+            endTime: appointment.endTime,
+            type: "appointment",
+          });
+        }
       }
       for (const blocker of existingBlockers) {
-        if (hasOverlap(occurrence.start, occurrence.end, blocker.startTime, blocker.endTime)) conflicts.add(blocker.id);
+        if (hasOverlap(occurrence.start, occurrence.end, blocker.startTime, blocker.endTime)) {
+          conflicts.set(`blocker:${blocker.id}`, {
+            name: blocker.name || "Blocker",
+            startTime: blocker.startTime,
+            endTime: blocker.endTime,
+            type: "blocker",
+          });
+        }
       }
     }
     if (conflicts.size > 0) {
-      throw new Error(`Zeitkonflikt: ${conflicts.size} Konflikte gefunden`);
+      throw new AppointmentSeriesConflictError([...conflicts.values()]);
     }
   }
 
@@ -195,38 +222,48 @@ function assertNoConflictsForProposedTimes(
   const rangeStart = Math.min(...proposedTimes.map((proposed) => proposed.start));
   const rangeEnd = Math.max(...proposedTimes.map((proposed) => proposed.end));
   const existingAppointments = db.prepare(`
-    SELECT id, start_time as startTime, end_time as endTime
+    SELECT id, patient_name as name, start_time as startTime, end_time as endTime
     FROM appointments
     WHERE status IN ('CONFIRMED', 'REQUESTED')
       AND start_time < ?
       AND end_time > ?
-  `).all(rangeEnd, rangeStart) as { id: string; startTime: number; endTime: number }[];
+  `).all(rangeEnd, rangeStart) as { id: string; name: string; startTime: number; endTime: number }[];
   const existingBlockers = db.prepare(`
-    SELECT id, start_time as startTime, end_time as endTime
+    SELECT id, title as name, start_time as startTime, end_time as endTime
     FROM blockers
     WHERE start_time < ?
       AND end_time > ?
-  `).all(rangeEnd, rangeStart) as { id: string; startTime: number; endTime: number }[];
+  `).all(rangeEnd, rangeStart) as { id: string; name: string; startTime: number; endTime: number }[];
 
-  const conflicts = new Set<string>();
+  const conflicts = new Map<string, AppointmentSeriesConflictDetail>();
   for (const proposed of proposedTimes) {
     for (const appointment of existingAppointments) {
       if (
         !excludedAppointmentIds.has(appointment.id) &&
         hasOverlap(proposed.start, proposed.end, appointment.startTime, appointment.endTime)
       ) {
-        conflicts.add(appointment.id);
+        conflicts.set(`appointment:${appointment.id}`, {
+          name: appointment.name || "Unbekannt",
+          startTime: appointment.startTime,
+          endTime: appointment.endTime,
+          type: "appointment",
+        });
       }
     }
     for (const blocker of existingBlockers) {
       if (hasOverlap(proposed.start, proposed.end, blocker.startTime, blocker.endTime)) {
-        conflicts.add(blocker.id);
+        conflicts.set(`blocker:${blocker.id}`, {
+          name: blocker.name || "Blocker",
+          startTime: blocker.startTime,
+          endTime: blocker.endTime,
+          type: "blocker",
+        });
       }
     }
   }
 
   if (conflicts.size > 0) {
-    throw new Error(`Zeitkonflikt: ${conflicts.size} Konflikte gefunden`);
+    throw new AppointmentSeriesConflictError([...conflicts.values()]);
   }
 }
 
@@ -299,7 +336,11 @@ export function updateAppointmentSeriesScope(
   const selected = getAppointmentOrThrow(deps.db, appointmentId);
   const now = deps.now();
 
-  if (scope === "single" || !selected.series_id) {
+  if (scope !== "single" && !selected.series_id) {
+    throw new Error("Termin gehört zu keiner Serie");
+  }
+
+  if (scope === "single") {
     const newStart = input.startTime ?? selected.start_time;
     const newDuration = input.durationMinutes ?? selected.duration_minutes;
     const newEnd = newStart + newDuration * 60_000;
@@ -478,7 +519,11 @@ export function deleteAppointmentSeriesScope(
 ): void {
   const selected = getAppointmentOrThrow(deps.db, appointmentId);
 
-  if (scope === "single" || !selected.series_id) {
+  if (scope !== "single" && !selected.series_id) {
+    throw new Error("Termin gehört zu keiner Serie");
+  }
+
+  if (scope === "single") {
     deps.db.prepare("DELETE FROM appointments WHERE id = ?").run(appointmentId);
     return;
   }

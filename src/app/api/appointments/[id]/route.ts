@@ -3,7 +3,7 @@ import { withApiAuth } from "@/lib/auth";
 import { checkCsrf } from "@/lib/csrf";
 import { filterNotes } from "@/lib/notes-filter";
 import { isValidDuration } from "@/lib/validation";
-import { deleteAppointmentSeriesScope, updateAppointmentSeriesScope } from "@/lib/appointment-series";
+import { AppointmentSeriesConflictError, deleteAppointmentSeriesScope, updateAppointmentSeriesScope } from "@/lib/appointment-series";
 import { normalizeSeriesScope } from "@/lib/series-rules";
 
 // GET /api/appointments/[id]
@@ -137,6 +137,12 @@ export const PATCH = withApiAuth(async (req, ctx) => {
     });
     return Response.json({ ok: true });
   } catch (error) {
+    if (error instanceof AppointmentSeriesConflictError) {
+      return Response.json(
+        { error: error.message, conflictDetails: error.conflictDetails },
+        { status: 409 }
+      );
+    }
     const message = error instanceof Error ? error.message : "Fehler beim Speichern";
     const statusCode = message.startsWith("Zeitkonflikt") ? 409 : message === "Termin nicht gefunden" ? 404 : 400;
     return Response.json({ error: message }, { status: statusCode });

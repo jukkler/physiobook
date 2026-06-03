@@ -7,7 +7,7 @@ import { checkCsrf } from "@/lib/csrf";
 import { getConflictDetails } from "@/lib/overlap";
 import { filterNotes } from "@/lib/notes-filter";
 import { detectAndGroupSeries } from "@/lib/series-detect";
-import { createAppointmentSeries } from "@/lib/appointment-series";
+import { AppointmentSeriesConflictError, createAppointmentSeries } from "@/lib/appointment-series";
 
 // GET /api/appointments?from=<epochMs>&to=<epochMs>
 export const GET = withApiAuth(async (req) => {
@@ -153,6 +153,12 @@ export const POST = withApiAuth(async (req) => {
       });
       return Response.json(result, { status: 201 });
     } catch (error) {
+      if (error instanceof AppointmentSeriesConflictError) {
+        return Response.json(
+          { error: error.message, conflictDetails: error.conflictDetails },
+          { status: 409 }
+        );
+      }
       const message = error instanceof Error ? error.message : "Fehler beim Erstellen der Serie";
       const statusCode = message.startsWith("Zeitkonflikt") ? 409 : 400;
       return Response.json({ error: message }, { status: statusCode });

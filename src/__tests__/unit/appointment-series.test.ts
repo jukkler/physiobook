@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
-import { createAppointmentSeries, deleteAppointmentSeriesScope, updateAppointmentSeriesScope } from "@/lib/appointment-series";
+import { AppointmentSeriesConflictError, createAppointmentSeries, deleteAppointmentSeriesScope, updateAppointmentSeriesScope } from "@/lib/appointment-series";
 
 function createTestDb() {
   const db = new Database(":memory:");
@@ -151,6 +151,44 @@ describe("createAppointmentSeries", () => {
     });
     expect(db.prepare("SELECT COUNT(*) AS count FROM appointments").get()).toEqual({ count: 4 });
   });
+
+  it("includes conflict details when creation overlaps an appointment", () => {
+    const db = createTestDb();
+    const start = Date.parse("2026-06-03T07:00:00.000Z");
+    db.prepare(`
+      INSERT INTO appointments (id, patient_name, start_time, end_time, duration_minutes, status, created_at, updated_at)
+      VALUES ('existing', 'Existing', ?, ?, 30, 'CONFIRMED', 1, 1)
+    `).run(start, start + 30 * 60_000);
+
+    try {
+      createAppointmentSeries(
+        {
+          patientName: "Ada Lovelace",
+          startTime: start,
+          durationMinutes: 30,
+          status: "CONFIRMED",
+          intervalWeeks: 1,
+          count: 1,
+          force: false,
+        },
+        {
+          db,
+          now: () => 1_800_000_000_000,
+          uuid: () => "unused",
+          syncPatient: () => "patient-1",
+          updatePatientContact: () => undefined,
+        }
+      );
+    } catch (error) {
+      expect(error).toBeInstanceOf(AppointmentSeriesConflictError);
+      expect((error as AppointmentSeriesConflictError).conflictDetails).toEqual([
+        { name: "Existing", startTime: start, endTime: start + 30 * 60_000, type: "appointment" },
+      ]);
+      return;
+    }
+
+    throw new Error("Expected AppointmentSeriesConflictError");
+  });
 });
 
 function seedSeries(db: Database.Database, start: number) {
@@ -177,6 +215,22 @@ function seedSeries(db: Database.Database, start: number) {
 }
 
 describe("updateAppointmentSeriesScope", () => {
+  it("rejects series scope for an appointment that does not belong to a series", () => {
+    const db = createTestDb();
+    const start = Date.parse("2026-06-03T07:00:00.000Z");
+    db.prepare(`
+      INSERT INTO appointments (id, patient_name, start_time, end_time, duration_minutes, status, created_at, updated_at)
+      VALUES ('single-appt', 'Ada Lovelace', ?, ?, 30, 'CONFIRMED', 1, 1)
+    `).run(start, start + 30 * 60_000);
+
+    expect(() => updateAppointmentSeriesScope(
+      "single-appt",
+      "series",
+      { startTime: start + 60 * 60_000 },
+      { db, now: () => 2, uuid: () => "unused", syncPatient: () => "patient-1", updatePatientContact: () => undefined }
+    )).toThrow("Termin gehört zu keiner Serie");
+  });
+
   it("marks a single moved occurrence without shifting the whole series", () => {
     const db = createTestDb();
     const start = Date.parse("2026-06-03T07:00:00.000Z");
@@ -408,6 +462,21 @@ describe("updateAppointmentSeriesScope", () => {
 });
 
 describe("deleteAppointmentSeriesScope", () => {
+  it("rejects future delete for an appointment that does not belong to a series", () => {
+    const db = createTestDb();
+    const start = Date.parse("2026-06-03T07:00:00.000Z");
+    db.prepare(`
+      INSERT INTO appointments (id, patient_name, start_time, end_time, duration_minutes, status, created_at, updated_at)
+      VALUES ('single-appt', 'Ada Lovelace', ?, ?, 30, 'CONFIRMED', 1, 1)
+    `).run(start, start + 30 * 60_000);
+
+    expect(() => deleteAppointmentSeriesScope(
+      "single-appt",
+      "future",
+      { db, now: () => 2, uuid: () => "unused", syncPatient: () => "patient-1", updatePatientContact: () => undefined }
+    )).toThrow("Termin gehört zu keiner Serie");
+  });
+
   it("deletes a single occurrence only", () => {
     const db = createTestDb();
     const start = Date.parse("2026-06-03T07:00:00.000Z");
