@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import { todayBerlin, getIsoWeekNumber } from "@/lib/time";
 import PdfImportPanel from "@/components/verwaltung/PdfImportPanel";
 import ArchiveDownloadPanel from "@/components/verwaltung/ArchiveDownloadPanel";
-import SmtpSettingsPanel from "@/components/verwaltung/SmtpSettingsPanel";
 import ReminderSettingsPanel from "@/components/verwaltung/ReminderSettingsPanel";
 import AutoArchivePanel from "@/components/verwaltung/AutoArchivePanel";
 import PracticeInfoPanel from "@/components/verwaltung/PracticeInfoPanel";
@@ -22,22 +21,6 @@ export default function VerwaltungClient() {
   });
   const [practiceSaving, setPracticeSaving] = useState(false);
   const [practiceMessage, setPracticeMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
-  // Email / SMTP settings
-  const [smtpSettings, setSmtpSettings] = useState({
-    smtpHost: "",
-    smtpPort: "587",
-    smtpUser: "",
-    smtpPass: "",
-    smtpFrom: "",
-    adminNotifyEmail: "",
-  });
-  const [smtpLoaded, setSmtpLoaded] = useState(false);
-  const [smtpSaving, setSmtpSaving] = useState(false);
-  const [smtpMessage, setSmtpMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [testEmail, setTestEmail] = useState("");
-  const [testSending, setTestSending] = useState(false);
-  const [testMessage, setTestMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Auto-archive settings
   const [autoArchive, setAutoArchive] = useState({
@@ -133,14 +116,6 @@ export default function VerwaltungClient() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data) {
-          setSmtpSettings((prev) => ({
-            smtpHost: data.smtpHost || prev.smtpHost,
-            smtpPort: data.smtpPort || prev.smtpPort,
-            smtpUser: data.smtpUser || prev.smtpUser,
-            smtpPass: data.smtpPass || prev.smtpPass,
-            smtpFrom: data.smtpFrom || prev.smtpFrom,
-            adminNotifyEmail: data.adminNotifyEmail || prev.adminNotifyEmail,
-          }));
           setAutoArchive((prev) => ({
             autoArchiveEnabled: data.autoArchiveEnabled || prev.autoArchiveEnabled,
             autoArchiveInterval: data.autoArchiveInterval || prev.autoArchiveInterval,
@@ -157,14 +132,9 @@ export default function VerwaltungClient() {
             setReminderEnabled(data.reminderNotificationsEnabled);
           }
         }
-        setSmtpLoaded(true);
       })
-      .catch(() => setSmtpLoaded(true));
+      .catch(() => undefined);
   }, []);
-
-  function updateSmtp(key: string, value: string) {
-    setSmtpSettings((prev) => ({ ...prev, [key]: value }));
-  }
 
   function updatePracticeInfo(key: "practiceName" | "practiceAddress" | "practicePhone", value: string) {
     setPracticeInfo((prev) => ({ ...prev, [key]: value }));
@@ -190,53 +160,6 @@ export default function VerwaltungClient() {
     } finally {
       setPracticeSaving(false);
       setTimeout(() => setPracticeMessage(null), 3000);
-    }
-  }
-
-  async function handleSmtpSave() {
-    setSmtpSaving(true);
-    setSmtpMessage(null);
-    try {
-      const res = await fetch("/api/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(smtpSettings),
-      });
-      if (res.ok) {
-        setSmtpMessage({ type: "success", text: "Gespeichert" });
-      } else {
-        const data = await res.json().catch(() => null);
-        setSmtpMessage({ type: "error", text: data?.error || "Fehler beim Speichern" });
-      }
-    } catch {
-      setSmtpMessage({ type: "error", text: "Netzwerkfehler" });
-    } finally {
-      setSmtpSaving(false);
-      setTimeout(() => setSmtpMessage(null), 3000);
-    }
-  }
-
-  async function handleTestEmail() {
-    if (!testEmail) return;
-    setTestSending(true);
-    setTestMessage(null);
-    try {
-      const res = await fetch("/api/settings/test-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: testEmail }),
-      });
-      if (res.ok) {
-        setTestMessage({ type: "success", text: "Test-E-Mail versendet" });
-      } else {
-        const data = await res.json().catch(() => null);
-        setTestMessage({ type: "error", text: data?.error || "Versand fehlgeschlagen" });
-      }
-    } catch {
-      setTestMessage({ type: "error", text: "Netzwerkfehler" });
-    } finally {
-      setTestSending(false);
-      setTimeout(() => setTestMessage(null), 5000);
     }
   }
 
@@ -423,20 +346,6 @@ export default function VerwaltungClient() {
         yearLabel={yearInfo.label}
         downloading={downloading}
         onDownload={handleDownload}
-      />
-
-      <SmtpSettingsPanel
-        smtpSettings={smtpSettings}
-        smtpLoaded={smtpLoaded}
-        smtpSaving={smtpSaving}
-        smtpMessage={smtpMessage}
-        testEmail={testEmail}
-        testSending={testSending}
-        testMessage={testMessage}
-        onSmtpChange={updateSmtp}
-        onSmtpSave={handleSmtpSave}
-        onTestEmailChange={setTestEmail}
-        onTestEmailSend={handleTestEmail}
       />
 
       <ReminderSettingsPanel

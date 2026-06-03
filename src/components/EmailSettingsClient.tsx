@@ -8,6 +8,7 @@ import {
 } from "@/lib/email-template-defaults";
 import PlaceholderHelp from "@/components/email-settings/PlaceholderHelp";
 import TemplateEditorPanel from "@/components/email-settings/TemplateEditorPanel";
+import SmtpSettingsPanel from "@/components/verwaltung/SmtpSettingsPanel";
 
 type EmailTemplateSettings = Record<EmailTemplateKey, string>;
 
@@ -21,6 +22,19 @@ export default function EmailSettingsClient() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [smtpSettings, setSmtpSettings] = useState({
+    smtpHost: "",
+    smtpPort: "587",
+    smtpUser: "",
+    smtpPass: "",
+    smtpFrom: "",
+    adminNotifyEmail: "",
+  });
+  const [smtpSaving, setSmtpSaving] = useState(false);
+  const [smtpMessage, setSmtpMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [testEmail, setTestEmail] = useState("");
+  const [testSending, setTestSending] = useState(false);
+  const [testMessage, setTestMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,6 +49,14 @@ export default function EmailSettingsClient() {
             if (typeof data[key] === "string") next[key] = data[key];
           }
           setSettings(next);
+          setSmtpSettings((prev) => ({
+            smtpHost: data.smtpHost || prev.smtpHost,
+            smtpPort: data.smtpPort || prev.smtpPort,
+            smtpUser: data.smtpUser || prev.smtpUser,
+            smtpPass: data.smtpPass || prev.smtpPass,
+            smtpFrom: data.smtpFrom || prev.smtpFrom,
+            adminNotifyEmail: data.adminNotifyEmail || prev.adminNotifyEmail,
+          }));
         }
       })
       .catch(() => {
@@ -53,6 +75,10 @@ export default function EmailSettingsClient() {
 
   function updateSetting(key: EmailTemplateKey, value: string) {
     setSettings((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function updateSmtp(key: string, value: string) {
+    setSmtpSettings((prev) => ({ ...prev, [key]: value }));
   }
 
   function insertPlaceholder(token: string) {
@@ -86,6 +112,57 @@ export default function EmailSettingsClient() {
     }
   }
 
+  async function saveSmtpSettings() {
+    setSmtpSaving(true);
+    setSmtpMessage(null);
+
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(smtpSettings),
+      });
+
+      if (res.ok) {
+        setSmtpMessage({ type: "success", text: "Gespeichert" });
+      } else {
+        const data = await res.json().catch(() => null);
+        setSmtpMessage({ type: "error", text: data?.error || "Fehler beim Speichern" });
+      }
+    } catch {
+      setSmtpMessage({ type: "error", text: "Netzwerkfehler" });
+    } finally {
+      setSmtpSaving(false);
+      setTimeout(() => setSmtpMessage(null), 3000);
+    }
+  }
+
+  async function sendTestEmail() {
+    if (!testEmail) return;
+    setTestSending(true);
+    setTestMessage(null);
+
+    try {
+      const res = await fetch("/api/settings/test-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: testEmail }),
+      });
+
+      if (res.ok) {
+        setTestMessage({ type: "success", text: "Test-E-Mail versendet" });
+      } else {
+        const data = await res.json().catch(() => null);
+        setTestMessage({ type: "error", text: data?.error || "Versand fehlgeschlagen" });
+      }
+    } catch {
+      setTestMessage({ type: "error", text: "Netzwerkfehler" });
+    } finally {
+      setTestSending(false);
+      setTimeout(() => setTestMessage(null), 5000);
+    }
+  }
+
   function resetDefaults() {
     setSettings(createDefaultSettings());
     setMessage(null);
@@ -94,6 +171,20 @@ export default function EmailSettingsClient() {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div className="space-y-6">
+        <SmtpSettingsPanel
+          smtpSettings={smtpSettings}
+          smtpLoaded={!loading}
+          smtpSaving={smtpSaving}
+          smtpMessage={smtpMessage}
+          testEmail={testEmail}
+          testSending={testSending}
+          testMessage={testMessage}
+          onSmtpChange={updateSmtp}
+          onSmtpSave={saveSmtpSettings}
+          onTestEmailChange={setTestEmail}
+          onTestEmailSend={sendTestEmail}
+        />
+
         {message && (
           <div
             className={`text-sm border rounded-md px-3 py-2 ${
