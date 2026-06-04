@@ -95,4 +95,68 @@ describe("email templates", () => {
 
     expect(rendered.html).toContain("Praxis Muster");
   });
+
+  it("removes @Logo when no logo url is stored", () => {
+    const db = createDb();
+    db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(
+      "emailSignature",
+      "@Logo"
+    );
+
+    const rendered = renderReminderEmail(db, {
+      Name: "Dunkel",
+      Datum: "03.06.2026",
+      Uhrzeit: "08:00",
+    });
+
+    expect(rendered.html).not.toContain("@Logo");
+    expect(rendered.html).not.toContain("<img");
+  });
+
+  it("renders @Logo as controlled image html", () => {
+    const db = createDb();
+    db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(
+      "emailSignature",
+      "@Logo"
+    );
+    db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(
+      "emailLogoUrl",
+      "https://therapiezentrum-ziesemer.de/email/logo-email.png"
+    );
+    db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(
+      "emailLogoWidth",
+      "320"
+    );
+
+    const rendered = renderReminderEmail(db, {
+      Name: "Dunkel",
+      Datum: "03.06.2026",
+      Uhrzeit: "08:00",
+    });
+
+    expect(rendered.html).toContain('<img src="https://therapiezentrum-ziesemer.de/email/logo-email.png"');
+    expect(rendered.html).toContain('width="320"');
+    expect(rendered.html).toContain("max-width:100%");
+  });
+
+  it("ignores non-https logo urls", () => {
+    const db = createDb();
+    db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(
+      "emailSignature",
+      "@Logo"
+    );
+    db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(
+      "emailLogoUrl",
+      "javascript:alert(1)"
+    );
+
+    const rendered = renderReminderEmail(db, {
+      Name: "Dunkel",
+      Datum: "03.06.2026",
+      Uhrzeit: "08:00",
+    });
+
+    expect(rendered.html).not.toContain("<img");
+    expect(rendered.html).not.toContain("javascript:");
+  });
 });

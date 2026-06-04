@@ -279,6 +279,7 @@ E-Mail-Texte werden ueber `src/lib/email-templates.ts` gerendert. Die editierbar
 - `reminderEmailSubjectTemplate` / `reminderEmailBodyTemplate`
 - `archiveEmailSubjectTemplate` / `archiveEmailBodyTemplate`
 - `emailSignature`
+- `emailLogoUrl` / `emailLogoWidth`
 
 Praxisinformationen werden ebenfalls in `settings` gespeichert:
 
@@ -286,7 +287,7 @@ Praxisinformationen werden ebenfalls in `settings` gespeichert:
 - `practiceAddress`
 - `practicePhone`
 
-Unterstuetzte Platzhalter sind unter anderem `@Name`, `@Datum`, `@Uhrzeit`, `@Dauer`, `@ArchivTyp`, `@ArchivTitel`, `@ArchivDatum`, `@Praxisname`, `@Praxisadresse` und `@Praxistelefon`.
+Unterstuetzte Platzhalter sind unter anderem `@Name`, `@Datum`, `@Uhrzeit`, `@Dauer`, `@ArchivTyp`, `@ArchivTitel`, `@ArchivDatum`, `@Praxisname`, `@Praxisadresse`, `@Praxistelefon` und `@Logo`. `@Logo` rendert serverseitig ein kontrolliertes `<img>` aus `emailLogoUrl`; freie HTML-Eingabe in Vorlagen ist nicht vorgesehen.
 
 ## PDF-Archiv und Import
 
