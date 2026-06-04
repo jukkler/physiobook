@@ -7,6 +7,8 @@ export type EmailTemplateKey =
   | "archiveEmailBodyTemplate"
   | "emailSignature";
 
+export type EmailLogoSettingKey = "emailLogoUrl" | "emailLogoWidth";
+
 export const EMAIL_TEMPLATE_KEYS: EmailTemplateKey[] = [
   "appointmentEmailSubjectTemplate",
   "appointmentEmailBodyTemplate",
@@ -47,6 +49,16 @@ Archiv: @ArchivTitel`,
 @Praxisname`,
 };
 
+export const EMAIL_LOGO_SETTING_KEYS: EmailLogoSettingKey[] = [
+  "emailLogoUrl",
+  "emailLogoWidth",
+];
+
+export const EMAIL_LOGO_DEFAULTS: Record<EmailLogoSettingKey, string> = {
+  emailLogoUrl: "",
+  emailLogoWidth: "360",
+};
+
 export const EMAIL_PLACEHOLDERS = [
   { token: "@Name", description: "Name des Patienten" },
   { token: "@Datum", description: "Datum des Termins" },
@@ -58,4 +70,5 @@ export const EMAIL_PLACEHOLDERS = [
   { token: "@Praxisname", description: "Name der Praxis" },
   { token: "@Praxisadresse", description: "Adresse der Praxis" },
   { token: "@Praxistelefon", description: "Telefonnummer der Praxis" },
+  { token: "@Logo", description: "E-Mail-Logo aus der gespeicherten Logo-URL" },
 ];

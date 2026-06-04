@@ -1,6 +1,6 @@
 // src/lib/settings.ts
 import { getDb } from "@/lib/db";
-import { EMAIL_TEMPLATE_DEFAULTS } from "@/lib/email-template-defaults";
+import { EMAIL_LOGO_DEFAULTS, EMAIL_TEMPLATE_DEFAULTS } from "@/lib/email-template-defaults";
 import { PRACTICE_INFO_DEFAULTS } from "@/lib/practice-info";
 
 type SettingKey = string;
@@ -16,6 +16,7 @@ const DEFAULTS: Record<string, string> = {
   retentionDaysPast: "90",
   ...PRACTICE_INFO_DEFAULTS,
   ...EMAIL_TEMPLATE_DEFAULTS,
+  ...EMAIL_LOGO_DEFAULTS,
 };
 
 /**

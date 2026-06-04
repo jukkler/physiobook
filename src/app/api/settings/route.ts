@@ -3,7 +3,7 @@ import { settings } from "@/lib/db/schema";
 import { withApiAuth } from "@/lib/auth";
 import { checkCsrf } from "@/lib/csrf";
 import { isValidEmail } from "@/lib/validation";
-import { EMAIL_TEMPLATE_KEYS } from "@/lib/email-template-defaults";
+import { EMAIL_LOGO_SETTING_KEYS, EMAIL_TEMPLATE_KEYS } from "@/lib/email-template-defaults";
 import { PRACTICE_INFO_KEYS } from "@/lib/practice-info";
 
 // GET /api/settings
@@ -54,6 +54,7 @@ export const PATCH = withApiAuth(async (req) => {
     "reminderNotificationsEnabled",
     ...PRACTICE_INFO_KEYS,
     ...EMAIL_TEMPLATE_KEYS,
+    ...EMAIL_LOGO_SETTING_KEYS,
   ];
 
   // Validate values
@@ -102,6 +103,32 @@ export const PATCH = withApiAuth(async (req) => {
 
     if (PRACTICE_INFO_KEYS.includes(key as (typeof PRACTICE_INFO_KEYS)[number]) && value.length > 200) {
       return Response.json({ error: "Praxisinformationen dürfen maximal 200 Zeichen pro Feld lang sein" }, { status: 400 });
+    }
+
+    if (key === "emailLogoUrl") {
+      if (value.length > 500) {
+        return Response.json({ error: "Die Logo-URL darf maximal 500 Zeichen lang sein" }, { status: 400 });
+      }
+
+      if (value !== "") {
+        let parsed: URL;
+        try {
+          parsed = new URL(value);
+        } catch {
+          return Response.json({ error: "Die Logo-URL muss eine gültige HTTPS-URL sein" }, { status: 400 });
+        }
+
+        if (parsed.protocol !== "https:") {
+          return Response.json({ error: "Die Logo-URL muss mit https:// beginnen" }, { status: 400 });
+        }
+      }
+    }
+
+    if (key === "emailLogoWidth" && value !== "") {
+      const width = Number(value);
+      if (!Number.isInteger(width) || width < 120 || width > 600) {
+        return Response.json({ error: "Die Logo-Breite muss zwischen 120 und 600 Pixeln liegen" }, { status: 400 });
+      }
     }
 
     if (key === "adminNotifyEmail" && value !== "") {
