@@ -57,6 +57,7 @@ export default function AppointmentForm({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [emailSending, setEmailSending] = useState(false);
+  const [overviewSending, setOverviewSending] = useState(false);
   const [emailMessage, setEmailMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [showEmailComposer, setShowEmailComposer] = useState(false);
   const [emailSubject, setEmailSubject] = useState("");
@@ -402,6 +403,55 @@ export default function AppointmentForm({
     }
   }
 
+  async function handleSendAppointmentsOverview() {
+    if (!appointment?.patientId) return;
+
+    const savedEmail = appointment.contactEmail?.trim() || "";
+    if (contactEmail.trim() !== savedEmail) {
+      setEmailMessage({
+        type: "error",
+        text: "Bitte die geänderte E-Mail-Adresse zuerst speichern.",
+      });
+      return;
+    }
+
+    if (!savedEmail) {
+      setEmailMessage({ type: "error", text: "Keine E-Mail-Adresse hinterlegt." });
+      return;
+    }
+
+    if (!window.confirm(`Alle kommenden Termine an ${savedEmail} senden?`)) return;
+
+    setOverviewSending(true);
+    setEmailMessage(null);
+    try {
+      const res = await fetch(
+        `/api/patients/${encodeURIComponent(appointment.patientId)}/appointments-email`,
+        { method: "POST" }
+      );
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        setEmailMessage({
+          type: "error",
+          text: data?.error || "Terminübersicht konnte nicht gesendet werden.",
+        });
+        return;
+      }
+
+      const verb = data.appointmentCount === 1 ? "wurde" : "wurden";
+      const noun = data.appointmentCount === 1 ? "Termin" : "Termine";
+      setEmailMessage({
+        type: "success",
+        text: `${data.appointmentCount} ${noun} ${verb} an ${data.email} gesendet.`,
+      });
+    } catch {
+      setEmailMessage({ type: "error", text: "Netzwerkfehler beim E-Mail-Versand." });
+    } finally {
+      setOverviewSending(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
@@ -635,40 +685,56 @@ export default function AppointmentForm({
           </div>
 
           {isEdit && (
-            <div className="grid grid-cols-3 gap-2 pt-1">
-              {onShowPatient && patientId && (
+            <div className="space-y-2 pt-1">
+              <div className="grid grid-cols-3 gap-2">
+                {onShowPatient && patientId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onShowPatient({
+                        id: patientId,
+                        name: patientName,
+                        email: contactEmail || null,
+                        phone: contactPhone || null,
+                      });
+                      onClose();
+                    }}
+                    className="px-4 py-2 text-sm text-gray-600 border border-dashed rounded-md hover:bg-gray-50 hover:text-gray-900"
+                  >
+                    Alle Termine
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => {
-                    onShowPatient({
-                      id: patientId,
-                      name: patientName,
-                      email: contactEmail || null,
-                      phone: contactPhone || null,
-                    });
-                    onClose();
-                  }}
+                  onClick={openEmailComposer}
+                  disabled={!canSendEmail || emailTemplateLoading}
+                  title={!contactEmail ? "Keine E-Mail-Adresse hinterlegt" : !isValidEmail(contactEmail) ? "Keine gültige E-Mail-Adresse hinterlegt" : "Eigene E-Mail an Patienten schreiben"}
+                  className="px-4 py-2 text-sm text-gray-700 border border-dashed border-gray-400 rounded-md hover:bg-gray-50 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {emailTemplateLoading ? "Lade..." : "E-Mail schreiben"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePrint}
                   className="px-4 py-2 text-sm text-gray-600 border border-dashed rounded-md hover:bg-gray-50 hover:text-gray-900"
                 >
-                  Alle Termine
+                  Termine drucken
+                </button>
+              </div>
+              {patientId && (
+                <button
+                  type="button"
+                  onClick={handleSendAppointmentsOverview}
+                  disabled={saving || overviewSending || !appointment?.contactEmail?.trim()}
+                  className="w-full px-4 py-2 text-sm font-medium text-blue-700 border border-blue-200 rounded-md hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {overviewSending
+                    ? "Terminübersicht wird gesendet..."
+                    : appointment?.contactEmail?.trim()
+                      ? "Terminübersicht per E-Mail senden"
+                      : "Keine E-Mail-Adresse hinterlegt"}
                 </button>
               )}
-              <button
-                type="button"
-                onClick={openEmailComposer}
-                disabled={!canSendEmail || emailTemplateLoading}
-                title={!contactEmail ? "Keine E-Mail-Adresse hinterlegt" : !isValidEmail(contactEmail) ? "Keine gültige E-Mail-Adresse hinterlegt" : "Eigene E-Mail an Patienten schreiben"}
-                className="px-4 py-2 text-sm text-gray-700 border border-dashed border-gray-400 rounded-md hover:bg-gray-50 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {emailTemplateLoading ? "Lade..." : "E-Mail schreiben"}
-              </button>
-              <button
-                type="button"
-                onClick={handlePrint}
-                className="px-4 py-2 text-sm text-gray-600 border border-dashed rounded-md hover:bg-gray-50 hover:text-gray-900"
-              >
-                Termine drucken
-              </button>
             </div>
           )}
 
