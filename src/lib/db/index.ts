@@ -16,7 +16,9 @@ export function getDb(): Database.Database {
     envValidated = true;
   }
   if (!db) {
-    db = new Database(path.resolve(DB_PATH));
+    // Laufzeitpfad aus der Umgebung: nicht vom Build-Tracing erfassen lassen,
+    // sonst kopiert Next.js das ganze Projekt bzw. die Datenbank nach .next/standalone
+    db = new Database(path.resolve(/* turbopackIgnore: true */ DB_PATH));
     db.pragma("journal_mode = WAL");
     db.pragma("busy_timeout = 5000");
     db.pragma("foreign_keys = ON");
