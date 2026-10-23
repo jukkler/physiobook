@@ -38,6 +38,8 @@ yarn-error.log*
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
+*.sqlite.bak-*
+/backups/
 
 # local Codex/Superpowers worktrees
 /.worktrees/
