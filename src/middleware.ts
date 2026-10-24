@@ -25,6 +25,23 @@ function isPublicRoute(pathname: string): boolean {
   );
 }
 
+// Baseline CSP for every page and API response. Script/style sources are left
+// open on purpose: Next.js injects inline scripts that would need nonces.
+const BASE_CSP = "base-uri 'self'; form-action 'self'; object-src 'none'";
+
+function withSecurityHeaders(res: NextResponse, pathname: string): NextResponse {
+  const isWidget = pathname === "/widget" || pathname.startsWith("/widget/");
+  // Only the main website may embed the widget; nothing may frame other pages
+  const widgetOrigin = process.env.WIDGET_ORIGIN || "https://therapiezentrum-ziesemer.de";
+  const frameAncestors = isWidget ? `frame-ancestors 'self' ${widgetOrigin}` : "frame-ancestors 'none'";
+  res.headers.set("Content-Security-Policy", `${frameAncestors}; ${BASE_CSP}`);
+  if (isWidget) {
+    // Remove X-Frame-Options if set (conflicts with frame-ancestors)
+    res.headers.delete("X-Frame-Options");
+  }
+  return res;
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
@@ -37,22 +54,13 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  return withSecurityHeaders(await route(req, pathname), pathname);
+}
+
+async function route(req: NextRequest, pathname: string): Promise<NextResponse> {
   // Public routes: allow through
   if (isPublicRoute(pathname)) {
-    const res = NextResponse.next();
-
-    // Allow widget to be embedded in the main website iframe
-    if (pathname === "/widget" || pathname.startsWith("/widget/")) {
-      const widgetOrigin = process.env.WIDGET_ORIGIN || "https://therapiezentrum-ziesemer.de";
-      res.headers.set(
-        "Content-Security-Policy",
-        `frame-ancestors 'self' ${widgetOrigin}`
-      );
-      // Remove X-Frame-Options if set (conflicts with frame-ancestors)
-      res.headers.delete("X-Frame-Options");
-    }
-
-    return res;
+    return NextResponse.next();
   }
 
   // Protected routes: check JWT signature + expiry (no DB access in Edge)
