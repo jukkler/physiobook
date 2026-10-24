@@ -1,0 +1,17 @@
+[Unit]
+Description=physiobook: geprüfte lokale Datenbank-Kopie
+Documentation=https://github.com/jukkler/physiobook#backup
+
+[Service]
+Type=oneshot
+User=physiobook-svc
+Group=physiobook-svc
+Environment=KEEP=30
+ExecStart=/usr/local/sbin/physiobook-backup-snapshot
+
+# Beschreibbar: Backup-Ordner und das DB-Verzeichnis (SQLite schreibt -shm auch beim Lesen)
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/backups/physiobook /var/lib/physiobook/db

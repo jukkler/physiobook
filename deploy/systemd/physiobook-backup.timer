@@ -1,0 +1,10 @@
+[Unit]
+Description=physiobook: taegliche Datenbank-Kopie
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+Unit=physiobook-backup.service
+
+[Install]
+WantedBy=timers.target

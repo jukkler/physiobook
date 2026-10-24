@@ -1,0 +1,32 @@
+[Unit]
+Description=physiobook (Terminkalender Praxis, Next.js standalone)
+Documentation=https://github.com/jukkler/physiobook#deployment-auf-einem-server
+After=network.target
+
+[Service]
+Type=simple
+User=physiobook-svc
+Group=physiobook-svc
+WorkingDirectory=/opt/physiobook/.next/standalone
+Environment=NODE_ENV=production PORT=3000
+EnvironmentFile=/opt/physiobook/.env
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=5
+# Node beendet sich bei SIGTERM mit 143 – das ist ein normaler Stopp, kein Fehler
+SuccessExitStatus=143
+
+# Härtung: Code ist schreibgeschützt, beschreibbar ist nur das DB-Verzeichnis
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+ReadWritePaths=/var/lib/physiobook/db
+
+[Install]
+WantedBy=multi-user.target
