@@ -21,7 +21,7 @@ function getSmtpConfig(): { host: string; port: number; user: string; pass: stri
   return { host, port, user, pass, from };
 }
 
-function createTransporter(config: { host: string; port: number; user: string; pass: string }): nodemailer.Transporter {
+function createTransporter(config: { host: string; port: number; user: string; pass: string }): ReturnType<typeof nodemailer.createTransport> {
   return nodemailer.createTransport({
     host: config.host,
     port: config.port,
